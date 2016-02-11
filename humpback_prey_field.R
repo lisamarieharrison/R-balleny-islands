@@ -3,26 +3,109 @@
 #date: 10/02/2016
 
 setwd(dir = "C:/Users/43439535/Documents/Lisa/phd/Balleny Islands/csv")
-
 gps      <- read.csv("GpsData.csv", header = T)
 sighting <- read.csv("Sighting.csv", header = T)
 env      <- read.csv("Environment.csv", header = T)
 effort   <- read.csv("Effort.csv", header = T)
+krill    <- read.csv("Krill.csv", header = T)
+library(chron)
+
+#source required functions
+function_list <- c("gcdHF.R",
+                   "deg2rad.R"
+)
+
+for (f in function_list) {
+  source(paste("C:/Users/43439535/Documents/Lisa/phd/Mixed models/R code/R-functions-southern-ocean/", f, sep = ""))
+}
 
 #subset sightings to only HB whales (HB = Species 07)
 sighting <- subset(sighting, Species == 07)
 
-#plot of sightings by date
-plot(table(sighting$Time), ylab = "Number of sightings", main = "HB sightings by date")
+plot(table(sighting$Date), ylab = "Number of sightings", main = "HB sightings by date") #plot of sightings by date
+
+sighting$Date <- chron(dates. = as.character(sighting$Date), format = "d/m/y")
+sighting$Time <- chron(times. = as.character(sighting$Time), format = "h:m:s")
+
+effort$Date <- chron(dates. = as.character(effort$Date), format = "d/m/y")
+effort$Time <- chron(times. = as.character(effort$Time), format = "h:m:s")
+
+#subset sightings and effort to only krill dates
+sighting <- sighting[chron(dates. = "3/2/2015", format = "d/m/y") <= sighting$Date & sighting$Date <= chron(dates. = "6/2/2015", format = "d/m/y"), ]
+effort   <- effort[chron(dates. = "3/2/2015", format = "d/m/y") <= effort$Date & effort$Date <= chron(dates. = "6/2/2015", format = "d/m/y"), ]
 
 #effort where MI observers present
 #next zero cell included to give total time on effort
 #doesn't include changes in observers 
 #doesn't include half effort for now
 #effort <- effort[effort$NObserversM != c(tail(effort$NObserversM, -1), 2), ]
-effort <- effort[(effort$NObserversM == 2 & c(tail(effort$NObserversM, -1), 2) == 0) | (effort$NObserversM == 0 & c(tail(effort$NObserversM, -1), 2) == 2), ]
-effort <- effort[-1, ]
+effort$NObserversM[effort$NObserversM == 1] <- 0 #to count half effort as off effort
+w <- which(effort$NObserversM == 0 & c(tail(effort$NObserversM, -1), 2) == 2)
+effort <- effort[sort(c(w, w + 1)), ]
+effort <- effort[-c(1, nrow(effort)), ]
 
+#gps index for start and end of effort
 gps_full <- effort$GpsIndex[effort$NObserversM == 2] #start of full effort
-gps_half <- effort$GpsIndex[effort$NObserversM == 1] #start of half effort
 gps_end  <- effort$GpsIndex[effort$NObserversM == 0] #end of effort
+
+#time and date of start and end of effort
+start_datetime <- chron(dates. = as.character(gps$PCTime[gps$Index %in% gps_full]), times. = as.character(gps$Time[gps$Index %in% gps_full]), format = c(dates = "d/m/y", times = "h:m:s"))
+end_datetime   <- chron(dates. = as.character(gps$PCTime[gps$Index %in% gps_end]), times. = as.character(gps$Time[gps$Index %in% gps_end]), format = c(dates = "d/m/y", times = "h:m:s"))
+
+#add 15 mins buffer to each to get full end bins
+start_datetime <- start_datetime - 15/60/24 
+end_datetime   <- end_datetime + 15/60/24
+
+
+#format krill times and dates to match sightings
+krill$Ping_date <- chron(dates. = as.character(krill$Ping_date), format = "y-m-d", out.format = "d/m/y")
+krill$Ping_time <- chron(times. = as.character(krill$Ping_time), format = "h:m:s")
+
+krill$arealDen[krill$arealDen == -9.900000e+37] <- NA #remove error values
+
+krill$datetime    <- chron(dates. = krill$Ping_date, times. = krill$Ping_time, format = c(dates = "d/m/y", times = "h:m:s"))
+sighting$datetime <- chron(dates. = sighting$Date, times. = sighting$Time, format = c(dates = "d/m/y", times = "h:m:s"))
+
+
+#remove krill when off effort for whales
+krill_on_effort <- NULL
+krill_datetime_on_effort <- NULL
+for (i in 1:length(start_datetime)) {
+  
+  w <- start_datetime[i] < krill$datetime & end_datetime[i] > krill$datetime
+  
+  if (sum(w) > 0) {
+    krill_on_effort <- c(krill_on_effort, krill$arealDen[w])
+    krill_datetime_on_effort <- c(krill_datetime_on_effort, as.character(krill$datetime[w]))
+  }
+  
+}
+
+krill_datetime_on_effort <- chron(dates. = substr(krill_datetime_on_effort, start = 2, stop = 9), times. = substr(krill_datetime_on_effort, start = 11, stop = 18), format = c(dates = "d/m/y", times = "h:m:s"))
+
+plot(krill_datetime_on_effort, krill_on_effort, pch = 19, xlab = "Date", ylab = "krill density gm2")
+rug(sighting$datetime, ticksize = 0.03, side = 1, lwd = 0.5, col = "red", quiet = TRUE) #ticks at whale locations
+title("Krill density with whale sightings in red")
+legend("topright", col = "red", "Whale sighting location", lwd = 2, bty= "n")
+
+#------------------------ TEST KRILL DENSITY WITH AND WITHOUT WHALES ----------------------#
+
+#plot krill density at cells with and without whales
+boxplot(krill$arealDen ~ whale_present, ylab = "krill density gm2")
+legend("topright", c("TRUE = whale sighting in cell", "FALSE = no whale in cell"), bty = "n")
+
+boxplot(log(krill$arealDen) ~ whale_present, ylab = "log(krill density gm2)")
+legend("topright", c("TRUE = whale sighting in cell", "FALSE = no whale in cell"), bty = "n")
+
+#two sample t-test
+#do cells with more whales have a higher krill density?
+#log transformed because of skew
+krill$arealDen[krill$arealDen == 0] <- NA #remove single 0 value
+t.test(log(krill$arealDen[whale_present]), log(krill$arealDen[!whale_present]), alternative = "greater")
+
+#Kolmogorov-Smirnov Test for non-parametric data
+#do cells with whales present have not less than (at least equal to) the krill density where whales are absent?
+#note that specifying alternative is done in opposite way to t.test
+ks.test(krill$arealDen[whale_present], krill$arealDen[!whale_present], alternative = "less")
+
+
