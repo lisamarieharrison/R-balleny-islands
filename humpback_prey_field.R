@@ -17,8 +17,10 @@ plot(table(sighting$Time), ylab = "Number of sightings", main = "HB sightings by
 
 #effort where MI observers present
 #next zero cell included to give total time on effort
-#doesn't include changes in observers
-effort <- effort[effort$NObserversM != c(tail(effort$NObserversM, -1), 2), ]
+#doesn't include changes in observers 
+#doesn't include half effort for now
+#effort <- effort[effort$NObserversM != c(tail(effort$NObserversM, -1), 2), ]
+effort <- effort[(effort$NObserversM == 2 & c(tail(effort$NObserversM, -1), 2) == 0) | (effort$NObserversM == 0 & c(tail(effort$NObserversM, -1), 2) == 2), ]
 effort <- effort[-1, ]
 
 gps_full <- effort$GpsIndex[effort$NObserversM == 2] #start of full effort
