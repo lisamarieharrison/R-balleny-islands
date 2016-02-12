@@ -64,6 +64,8 @@ effort <- effort[-c(1, nrow(effort)), ]
 gps_full <- effort$GpsIndex[effort$NObserversM == 2] #start of full effort
 gps_end  <- effort$GpsIndex[effort$NObserversM == 0] #end of effort
 
+## FIX BUG HERE ##
+
 #time and date of start and end of effort
 start_datetime <- chron(dates. = as.character(gps$PCTime[gps$Index %in% gps_full]), times. = as.character(gps$Time[gps$Index %in% gps_full]), format = c(dates = "d/m/y", times = "h:m:s"))
 end_datetime   <- chron(dates. = as.character(gps$PCTime[gps$Index %in% gps_end]), times. = as.character(gps$Time[gps$Index %in% gps_end]), format = c(dates = "d/m/y", times = "h:m:s"))
@@ -72,6 +74,7 @@ end_datetime   <- chron(dates. = as.character(gps$PCTime[gps$Index %in% gps_end]
 start_datetime <- start_datetime - 15/60/24 
 end_datetime   <- end_datetime + 15/60/24
 
+#############
 
 #format krill times and dates to match sightings
 krill$Ping_date <- chron(dates. = as.character(krill$Ping_date), format = "y-m-d", out.format = "d/m/y")
@@ -86,6 +89,8 @@ sighting$datetime <- chron(dates. = sighting$Date, times. = sighting$Time, forma
 #remove krill when off effort for whales
 krill_on_effort <- NULL
 krill_datetime_on_effort <- NULL
+krill_lat_on_effort <- NULL
+krill_long_on_effort <- NULL
 for (i in 1:length(start_datetime)) {
   
   w <- start_datetime[i] < krill$datetime & end_datetime[i] > krill$datetime
@@ -93,6 +98,8 @@ for (i in 1:length(start_datetime)) {
   if (sum(w) > 0) {
     krill_on_effort <- c(krill_on_effort, krill$arealDen[w])
     krill_datetime_on_effort <- c(krill_datetime_on_effort, as.character(krill$datetime[w]))
+    krill_lat_on_effort <- c(krill_lat_on_effort, krill$Latitude[w])
+    krill_long_on_effort <- c(krill_long_on_effort, krill$Longitude[w])
   }
   
 }
@@ -158,6 +165,16 @@ summary(krill.glm)
 
 table(on_effort$whale_present, round(krill.glm$fitted.values))
 
+
+plot(gps$Heading[gps$PCTime == "3/02/2015"])
+
+direction <- gps$Heading[gps$PCTime %in% c("3/02/2015", "4/02/2015", "5/02/2015", "6/02/2015")]
+x <- gps$Longitude[gps$PCTime %in% c("3/02/2015", "4/02/2015", "5/02/2015", "6/02/2015")]
+y <- gps$Latitude[gps$PCTime %in% c("3/02/2015", "4/02/2015", "5/02/2015", "6/02/2015")]
+
+plot(krill_long_on_effort, krill_lat_on_effort)
+vectorField(direction, 1, x, y, scale = 0.05)
+points(krill_long_on_effort, krill_lat_on_effort, col = "red", pch = 19)
 
 
 
