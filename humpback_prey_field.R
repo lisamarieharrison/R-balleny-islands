@@ -94,7 +94,7 @@ legend("topright", col = "red", "Whale sighting location", lwd = 2, bty= "n")
 whale_present <- rep(FALSE, length(krill_datetime_on_effort))
 for (i in 1:nrow(sighting)) {
   w <- which.min(abs(sighting$datetime[i] - krill_datetime_on_effort)*24*60)
-  if (abs(sighting$datetime[i] - krill_datetime_on_effort[w])*24*60 <= 5) {
+  if (abs(sighting$datetime[i] - krill_datetime_on_effort[w])*24*60 <= 15) {
     whale_present[w] <- TRUE
   }
 }
