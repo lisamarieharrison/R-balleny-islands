@@ -92,10 +92,14 @@ legend("topright", col = "red", "Whale sighting location", lwd = 2, bty= "n")
 #does a krill cell contain a whale?
 #for each sighting, which cell is the whale closest to?
 whale_present <- rep(FALSE, length(krill_datetime_on_effort))
+whale_number  <- rep(0, length(krill_datetime_on_effort))
+sighting_id   <- NULL
 for (i in 1:nrow(sighting)) {
   w <- which.min(abs(sighting$datetime[i] - krill_datetime_on_effort)*24*60)
   if (abs(sighting$datetime[i] - krill_datetime_on_effort[w])*24*60 <= 15) {
     whale_present[w] <- TRUE
+    whale_number[w]  <- sighting$BestNumber[i]
+    sighting_id[w]   <- sighting$Index[i]
   }
 }
 
@@ -116,5 +120,19 @@ t.test(log(krill_on_effort[whale_present]), log(krill_on_effort[!whale_present])
 #do cells with whales present have not less than (at least equal to) the krill density where whales are absent?
 #note that specifying alternative is done in opposite way to t.test
 ks.test(krill_on_effort[whale_present], krill_on_effort[!whale_present], alternative = "less")
+
+
+#------------------------ PLOT KRILL DENSITY AGAINST NUMBER OF WHALES ----------------------#
+
+#number of whales varies between 1 and 6
+plot(krill_datetime_on_effort, krill_on_effort, pch = 19, xlab = "Date", ylab = "krill density gm2", xaxt = "n")
+axis(1, sighting$datetime, sighting$BestNumber, col.ticks = "red") #ticks at whale locations with number
+title("Krill density with number of whales in each sighting in red")
+legend("topright", col = "red", "Whale sighting location", lwd = 2, bty= "n")
+
+plot(krill_on_effort, whale_number, pch = 19, xlab = "Krill density gm2", ylab = "Number of whales in sighting", cex.lab = 2)
+points(na.omit(krill_on_effort[sighting_id == na.omit(sighting$Index[sighting$Behaviour == 5])]), na.omit(whale_number[sighting_id == na.omit(sighting$Index[sighting$Behaviour == 5])]), col = "red")
+legend("topright", col = c("red", "black"), pch = 19, c("Feeding", "Other behaviour"), bty = "n")
+
 
 
