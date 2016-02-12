@@ -10,6 +10,7 @@ env      <- read.csv("Environment.csv", header = T)
 effort   <- read.csv("Effort.csv", header = T)
 krill    <- read.csv("Krill.csv", header = T)
 library(chron)
+library(ggplot2)
 
 #source required functions
 function_list <- c("gcdHF.R",
@@ -32,6 +33,12 @@ plot(table(sighting$Date), ylab = "Number of sightings", main = "HB sightings by
 #plot sightings along transect
 plot(krill$Longitude, krill$Latitude, type = "l", xlab = "Longitude", ylab = "Latitude")
 points(gps$Longitude[gps$Index %in% sighting$GpsIndex], gps$Latitude[gps$Index %in% sighting$GpsIndex], col = "red", pch = 19)
+
+d <- qplot(Longitude, Latitude, data=krill, colour=y)
+d + scale_colour_gradient(low = "grey", high = "blue", name = "Krill density gm2") + 
+  theme_bw() +
+  geom_point(data = gps[gps$Index %in% sighting$GpsIndex & gps$Latitude < -66, ], aes(Longitude, Latitude), colour = "red", shape = 8)
+
 
 sighting$Date <- chron(dates. = as.character(sighting$Date), format = "d/m/y")
 sighting$Time <- chron(times. = as.character(sighting$Time), format = "h:m:s")
@@ -150,5 +157,7 @@ krill.glm <- glm(whale_present ~ krill_on_effort, family = binomial(link = logit
 summary(krill.glm)
 
 table(on_effort$whale_present, round(krill.glm$fitted.values))
+
+
 
 
