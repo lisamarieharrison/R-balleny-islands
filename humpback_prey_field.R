@@ -82,7 +82,7 @@ for (i in 1:length(start_datetime)) {
 }
 krill_datetime_on_effort <- chron(dates. = substr(krill_datetime_on_effort, start = 2, stop = 9), times. = substr(krill_datetime_on_effort, start = 11, stop = 18), format = c(dates = "d/m/y", times = "h:m:s"))
 
-plot(krill_datetime_on_effort, krill_on_effort, pch = 19, xlab = "Date", ylab = "krill density gm2")
+plot(krill_datetime_on_effort, krill_on_effort, type = "l", xlab = "Date", ylab = "krill density gm2")
 rug(sighting$datetime, ticksize = 0.03, side = 1, lwd = 0.5, col = "red", quiet = TRUE) #ticks at whale locations
 title("Krill density with whale sightings in red")
 legend("topright", col = "red", "Whale sighting location", lwd = 2, bty= "n")
