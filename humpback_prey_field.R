@@ -1,6 +1,7 @@
 #balleny islands krill prey field analysis
 #author: Lisa-Marie Harrison
 #date: 10/02/2016
+#3 passes over the same transect so time and date used to match sightings rather than lat and long
 
 setwd(dir = "C:/Users/43439535/Documents/Lisa/phd/Balleny Islands/csv")
 gps      <- read.csv("GpsData.csv", header = T)
@@ -21,6 +22,9 @@ for (f in function_list) {
 
 #subset sightings to only HB whales (HB = Species 07)
 sighting <- subset(sighting, Species == 07)
+
+#subset sightings to only MI platform
+sighting <- subset(sighting, Platform == "MI")
 
 plot(table(sighting$Date), ylab = "Number of sightings", main = "HB sightings by date") #plot of sightings by date
 
@@ -125,7 +129,7 @@ ks.test(krill_on_effort[whale_present], krill_on_effort[!whale_present], alterna
 #------------------------ PLOT KRILL DENSITY AGAINST NUMBER OF WHALES ----------------------#
 
 #number of whales varies between 1 and 6
-plot(krill_datetime_on_effort, krill_on_effort, pch = 19, xlab = "Date", ylab = "krill density gm2", xaxt = "n")
+plot(krill_datetime_on_effort, krill_on_effort, type = "l", xlab = "Date", ylab = "krill density gm2", xaxt = "n")
 axis(1, sighting$datetime, sighting$BestNumber, col.ticks = "red") #ticks at whale locations with number
 title("Krill density with number of whales in each sighting in red")
 legend("topright", col = "red", "Whale sighting location", lwd = 2, bty= "n")
@@ -141,6 +145,7 @@ krill.glm <- glm(whale_present ~ krill_on_effort, family = binomial(link = logit
 summary(krill.glm)
 
 table(on_effort$whale_present, round(krill.glm$fitted.values))
+
 
 
 
