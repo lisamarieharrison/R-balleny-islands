@@ -80,7 +80,6 @@ for (i in 1:length(start_datetime)) {
   }
   
 }
-
 krill_datetime_on_effort <- chron(dates. = substr(krill_datetime_on_effort, start = 2, stop = 9), times. = substr(krill_datetime_on_effort, start = 11, stop = 18), format = c(dates = "d/m/y", times = "h:m:s"))
 
 plot(krill_datetime_on_effort, krill_on_effort, pch = 19, xlab = "Date", ylab = "krill density gm2")
@@ -90,22 +89,32 @@ legend("topright", col = "red", "Whale sighting location", lwd = 2, bty= "n")
 
 #------------------------ TEST KRILL DENSITY WITH AND WITHOUT WHALES ----------------------#
 
+#does a krill cell contain a whale?
+#for each sighting, which cell is the whale closest to?
+whale_present <- rep(FALSE, length(krill_datetime_on_effort))
+for (i in 1:nrow(sighting)) {
+  w <- which.min(abs(sighting$datetime[i] - krill_datetime_on_effort)*24*60)
+  if (abs(sighting$datetime[i] - krill_datetime_on_effort[w])*24*60 <= 5) {
+    whale_present[w] <- TRUE
+  }
+}
+
 #plot krill density at cells with and without whales
-boxplot(krill$arealDen ~ whale_present, ylab = "krill density gm2")
+boxplot(krill_on_effort ~ whale_present, ylab = "krill density gm2")
 legend("topright", c("TRUE = whale sighting in cell", "FALSE = no whale in cell"), bty = "n")
 
-boxplot(log(krill$arealDen) ~ whale_present, ylab = "log(krill density gm2)")
+boxplot(log(krill_on_effort) ~ whale_present, ylab = "log(krill density gm2)")
 legend("topright", c("TRUE = whale sighting in cell", "FALSE = no whale in cell"), bty = "n")
 
 #two sample t-test
 #do cells with more whales have a higher krill density?
 #log transformed because of skew
-krill$arealDen[krill$arealDen == 0] <- NA #remove single 0 value
-t.test(log(krill$arealDen[whale_present]), log(krill$arealDen[!whale_present]), alternative = "greater")
+krill_on_effort[krill_on_effort == 0] <- NA #remove single 0 value
+t.test(log(krill_on_effort[whale_present]), log(krill_on_effort[!whale_present]), alternative = "greater")
 
 #Kolmogorov-Smirnov Test for non-parametric data
 #do cells with whales present have not less than (at least equal to) the krill density where whales are absent?
 #note that specifying alternative is done in opposite way to t.test
-ks.test(krill$arealDen[whale_present], krill$arealDen[!whale_present], alternative = "less")
+ks.test(krill_on_effort[whale_present], krill_on_effort[!whale_present], alternative = "less")
 
 
