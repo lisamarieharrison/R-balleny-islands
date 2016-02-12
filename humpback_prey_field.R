@@ -135,21 +135,15 @@ points(na.omit(krill_on_effort[sighting_id == na.omit(sighting$Index[sighting$Be
 legend("topright", col = c("red", "black"), pch = 19, c("Feeding", "Other behaviour"), bty = "n")
 
 
-#------------------------------------ SMOOTH KRILL DATA -------------------------------------#
-
-on_effort <- data.frame(cbind(krill_datetime_on_effort, krill_on_effort, whale_present))
-on_effort <- na.omit(on_effort)
-
-krill_smooth <- ksmooth(x = on_effort$krill_datetime_on_effort, y = on_effort$krill_on_effort, bandwidth = 0.02, x.points = krill_datetime_on_effort)
-
-plot(krill_smooth$x, krill_smooth$y, type = "l")
-
-
-boxplot(log(krill_smooth$y) ~ whale_present, ylab = "krill density gm2")
-
-
+#------------------------------------ PREDICTIVE GLM --------------------------------------#
 
 krill.glm <- glm(whale_present ~ krill_on_effort, family = binomial(link = logit), data = on_effort)
 summary(krill.glm)
 
 table(on_effort$whale_present, round(krill.glm$fitted.values))
+
+
+
+
+
+
