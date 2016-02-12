@@ -26,7 +26,12 @@ sighting <- subset(sighting, Species == 07)
 #subset sightings to only MI platform
 sighting <- subset(sighting, Platform == "MI")
 
-plot(table(sighting$Date), ylab = "Number of sightings", main = "HB sightings by date") #plot of sightings by date
+#plot of sightings by date
+plot(table(sighting$Date), ylab = "Number of sightings", main = "HB sightings by date") 
+
+#plot sightings along transect
+plot(krill$Longitude, krill$Latitude, type = "l", xlab = "Longitude", ylab = "Latitude")
+points(gps$Longitude[gps$Index %in% sighting$GpsIndex], gps$Latitude[gps$Index %in% sighting$GpsIndex], col = "red", pch = 19)
 
 sighting$Date <- chron(dates. = as.character(sighting$Date), format = "d/m/y")
 sighting$Time <- chron(times. = as.character(sighting$Time), format = "h:m:s")
@@ -145,10 +150,5 @@ krill.glm <- glm(whale_present ~ krill_on_effort, family = binomial(link = logit
 summary(krill.glm)
 
 table(on_effort$whale_present, round(krill.glm$fitted.values))
-
-
-
-
-
 
 
