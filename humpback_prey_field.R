@@ -116,7 +116,7 @@ krill_datetime_on_effort <- chron(dates. = substr(krill_datetime_on_effort, star
 plot(krill_datetime_on_effort, krill_on_effort, pch = 19, xlab = "Date", ylab = "krill density gm2")
 rug(sighting$datetime, ticksize = 0.03, side = 1, lwd = 0.5, col = "red", quiet = TRUE) #ticks at whale locations
 title("Krill density with whale sightings in red")
-legend("topright", col = "red", "Whale sighting location", lwd = 2, bty= "n")
+legend("topright", col = "red", "Whale sighting location", lwd = 2, bty = "n"
 
 #------------------------ TEST KRILL DENSITY WITH AND WITHOUT WHALES ----------------------#
 
@@ -157,7 +157,7 @@ ks.boot(krill_on_effort[whale_present], krill_on_effort[!whale_present], nboots 
 #------------------------ PLOT KRILL DENSITY AGAINST NUMBER OF WHALES ----------------------#
 
 #number of whales varies between 1 and 6
-plot(krill_datetime_on_effort, krill_on_effort, type = "l", xlab = "Date", ylab = "krill density gm2", xaxt = "n")
+plot(krill_datetime_on_effort, krill_on_effort, pch = 19, xlab = "Date", ylab = "krill density gm2", xaxt = "n")
 axis(1, sighting$datetime, sighting$BestNumber, col.ticks = "red") #ticks at whale locations with number
 title("Krill density with number of whales in each sighting in red")
 legend("topright", col = "red", "Whale sighting location", lwd = 2, bty= "n")
@@ -174,8 +174,9 @@ summary(krill.glm)
 
 table(whale_present[!is.na(krill_on_effort)], round(krill.glm$fitted.values))
 
+#------------------------------------ SHIP HEADING ---------------------------------------#
 
-plot(gps$Heading[gps$PCTime == "3/02/2015"])
+#gps doesn't take into account on effort times
 
 direction <- gps$Heading[gps$PCTime %in% c("3/02/2015", "4/02/2015", "5/02/2015", "6/02/2015")]
 x <- gps$Longitude[gps$PCTime %in% c("3/02/2015", "4/02/2015", "5/02/2015", "6/02/2015")]
