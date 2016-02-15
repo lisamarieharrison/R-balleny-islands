@@ -139,7 +139,8 @@ t.test(log(krill_on_effort[whale_present]), log(krill_on_effort[!whale_present])
 #do cells with whales present have not less than (at least equal to) the krill density where whales are absent?
 #note that specifying alternative is done in opposite way to t.test
 ks.test(krill_on_effort[whale_present], krill_on_effort[!whale_present], alternative = "less")
-
+#use K-S bootstrap implementation because there are ties present
+ks.boot(krill_on_effort[whale_present], krill_on_effort[!whale_present], nboots = 1000, alternative = "less")
 
 #------------------------ PLOT KRILL DENSITY AGAINST NUMBER OF WHALES ----------------------#
 
