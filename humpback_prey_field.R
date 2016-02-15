@@ -11,6 +11,8 @@ effort   <- read.csv("Effort.csv", header = T)
 krill    <- read.csv("Krill.csv", header = T)
 library(chron)
 library(ggplot2)
+library(Matching) #K-S bootstrap
+library(plotrix) #vectorField
 
 #source required functions
 function_list <- c("gcdHF.R",
@@ -157,10 +159,10 @@ legend("topright", col = c("red", "black"), pch = 19, c("Feeding", "Other behavi
 
 #------------------------------------ PREDICTIVE GLM --------------------------------------#
 
-krill.glm <- glm(whale_present ~ krill_on_effort, family = binomial(link = logit), data = on_effort)
+krill.glm <- glm(whale_present ~ krill_on_effort, family = binomial(link = logit))
 summary(krill.glm)
 
-table(on_effort$whale_present, round(krill.glm$fitted.values))
+table(whale_present[!is.na(krill_on_effort)], round(krill.glm$fitted.values))
 
 
 plot(gps$Heading[gps$PCTime == "3/02/2015"])
@@ -170,7 +172,7 @@ x <- gps$Longitude[gps$PCTime %in% c("3/02/2015", "4/02/2015", "5/02/2015", "6/0
 y <- gps$Latitude[gps$PCTime %in% c("3/02/2015", "4/02/2015", "5/02/2015", "6/02/2015")]
 
 plot(krill_long_on_effort, krill_lat_on_effort)
-vectorField(direction, 1, x, y, scale = 0.05)
+vectorField(direction, 1, x, y, scale = 0.05, vecspec = "deg")
 points(krill_long_on_effort, krill_lat_on_effort, col = "red", pch = 19)
 
 
