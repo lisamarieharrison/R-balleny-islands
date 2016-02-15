@@ -56,15 +56,13 @@ effort   <- effort[chron(dates. = "3/2/2015", format = "d/m/y") <= effort$Date &
 #doesn't include half effort for now
 #effort <- effort[effort$NObserversM != c(tail(effort$NObserversM, -1), 2), ]
 effort$NObserversM[effort$NObserversM == 1] <- 0 #to count half effort as off effort
-w <- which(effort$NObserversM == 0 & c(tail(effort$NObserversM, -1), 2) == 2)
-effort <- effort[sort(c(w, w + 1)), ]
-effort <- effort[-c(1, nrow(effort)), ]
+effort$NObserversM[effort$EffortStatus == "OF"] <- 0 #remove observers if waypoint is marked as being off transect
+w <- which(effort$NObserversM == 0 & c(0, head(effort$NObserversM, -1)) == 2 | effort$NObserversM == 2 & c(0, head(effort$NObserversM, -1)) == 0)
+effort <- effort[w, ]
 
 #gps index for start and end of effort
 gps_full <- effort$GpsIndex[effort$NObserversM == 2] #start of full effort
 gps_end  <- effort$GpsIndex[effort$NObserversM == 0] #end of effort
-
-## FIX BUG HERE ##
 
 #time and date of start and end of effort
 start_datetime <- chron(dates. = as.character(gps$PCTime[gps$Index %in% gps_full]), times. = as.character(gps$Time[gps$Index %in% gps_full]), format = c(dates = "d/m/y", times = "h:m:s"))
@@ -73,8 +71,6 @@ end_datetime   <- chron(dates. = as.character(gps$PCTime[gps$Index %in% gps_end]
 #add 15 mins buffer to each to get full end bins
 start_datetime <- start_datetime - 15/60/24 
 end_datetime   <- end_datetime + 15/60/24
-
-#############
 
 #format krill times and dates to match sightings
 krill$Ping_date <- chron(dates. = as.character(krill$Ping_date), format = "y-m-d", out.format = "d/m/y")
