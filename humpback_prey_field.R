@@ -61,14 +61,21 @@ effort$NObserversM[effort$NObserversM == 1] <- 0 #to count half effort as off ef
 effort$NObserversM[effort$EffortStatus == "OF"] <- 0 #remove observers if waypoint is marked as being off transect
 w <- which(effort$NObserversM == 0 & c(0, head(effort$NObserversM, -1)) == 2 | effort$NObserversM == 2 & c(0, head(effort$NObserversM, -1)) == 0)
 effort <- effort[w, ]
+effort <- effort[-nrow(effort), ]
 
 #gps index for start and end of effort
 gps_full <- effort$GpsIndex[effort$NObserversM == 2] #start of full effort
 gps_end  <- effort$GpsIndex[effort$NObserversM == 0] #end of effort
 
 #time and date of start and end of effort
-start_datetime <- chron(dates. = as.character(gps$PCTime[gps$Index %in% gps_full]), times. = as.character(gps$Time[gps$Index %in% gps_full]), format = c(dates = "d/m/y", times = "h:m:s"))
-end_datetime   <- chron(dates. = as.character(gps$PCTime[gps$Index %in% gps_end]), times. = as.character(gps$Time[gps$Index %in% gps_end]), format = c(dates = "d/m/y", times = "h:m:s"))
+
+start_datetime <- chron(dates. = as.character(gps$PCTime[na.omit(match(gps_full, gps$Index))]), times. = as.character(gps$Time[na.omit(match(gps_full, gps$Index))]), format = c(dates = "d/m/y", times = "h:m:s"))
+end_datetime   <- chron(dates. = as.character(gps$PCTime[na.omit(match(gps_end, gps$Index))]), times. = as.character(gps$Time[na.omit(match(gps_end, gps$Index))]), format = c(dates = "d/m/y", times = "h:m:s"))
+
+#reminder to check start and end time length for duplicates
+if (length(start_datetime) != length(end_datetime)) {
+  stop("Effort start and end times do not match up")
+}
 
 #add 15 mins buffer to each to get full end bins
 start_datetime <- start_datetime - 15/60/24 
@@ -172,7 +179,7 @@ x <- gps$Longitude[gps$PCTime %in% c("3/02/2015", "4/02/2015", "5/02/2015", "6/0
 y <- gps$Latitude[gps$PCTime %in% c("3/02/2015", "4/02/2015", "5/02/2015", "6/02/2015")]
 
 plot(krill_long_on_effort, krill_lat_on_effort)
-vectorField(direction, 1, x, y, scale = 0.05, vecspec = "deg")
+vectorField(direction, 1, x, y, scale = 0.005, vecspec = "deg")
 points(krill_long_on_effort, krill_lat_on_effort, col = "red", pch = 19)
 
 
