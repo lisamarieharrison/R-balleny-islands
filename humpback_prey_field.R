@@ -29,12 +29,6 @@ sighting <- subset(sighting, Species == 07 & Platform == "MI")
 #plot of sightings by date
 plot(table(sighting$Date), ylab = "Number of sightings", main = "HB sightings by date") 
 
-sighting$Date <- chron(dates. = as.character(sighting$Date), format = "d/m/y")
-sighting$Time <- chron(times. = as.character(sighting$Time), format = "h:m:s")
-
-effort$Date <- chron(dates. = as.character(effort$Date), format = "d/m/y")
-effort$Time <- chron(times. = as.character(effort$Time), format = "h:m:s")
-
 #remove error values
 krill$arealDen[krill$arealDen == -9.900000e+37] <- NA
 
@@ -42,15 +36,13 @@ krill$arealDen[krill$arealDen == -9.900000e+37] <- NA
 krill <- krill[!duplicated(krill), ]
 
 #format krill times and dates to match sightings
-krill$Ping_date <- chron(dates. = as.character(krill$Ping_date), format = "y-m-d", out.format = "d/m/y")
-krill$Ping_time <- chron(times. = as.character(krill$Ping_time), format = "h:m:s")
-krill$datetime  <- chron(dates. = krill$Ping_date, times. = krill$Ping_time, format = c(dates = "d/m/y", times = "h:m:s"))
-
-sighting$datetime <- chron(dates. = sighting$Date, times. = sighting$Time, format = c(dates = "d/m/y", times = "h:m:s"))
-effort$datetime <- chron(dates. = as.character(effort$Date), times. = as.character(effort$Time), format = c(dates = "d/m/y", times = "h:m:s"))
+krill$datetime    <- chron(dates. = as.character(krill$Ping_date), times. = as.character(krill$Ping_time), format = c(dates = "y-m-d", times = "h:m:s"), out.format = c(dates = "d/m/y", times = "h:m:s"))
+sighting$datetime <- chron(dates. = as.character(sighting$Date), times. = as.character(sighting$Time), format = c(dates = "d/m/y", times = "h:m:s"))
+effort$datetime   <- chron(dates. = as.character(effort$Date), times. = as.character(effort$Time), format = c(dates = "d/m/y", times = "h:m:s"))
 gps$datetime      <- chron(dates. = as.character(gps$PCTime), times. = gps$Time, format = c(dates = "d/m/y", times = "h:m:s"))
-sighting <- subset(sighting, sighting$datetime >= min(krill$datetime) & sighting$datetime <= max(krill$datetime))
-gps      <- subset(gps, gps$datetime >= min(krill$datetime) & gps$datetime <= max(krill$datetime))
+
+sighting    <- subset(sighting, sighting$datetime >= min(krill$datetime) & sighting$datetime <= max(krill$datetime))
+gps         <- subset(gps, gps$datetime >= min(krill$datetime) & gps$datetime <= max(krill$datetime))
 effort      <- subset(effort, effort$datetime >= min(krill$datetime) & effort$datetime <= max(krill$datetime))
 
 #effort where MI observers present
@@ -58,8 +50,7 @@ effort      <- subset(effort, effort$datetime >= min(krill$datetime) & effort$da
 #doesn't include changes in observers 
 #doesn't include half effort for now
 #effort <- effort[effort$NObserversM != c(tail(effort$NObserversM, -1), 2), ]
-effort$NObserversM[effort$NObserversM == 1] <- 0 #to count half effort as off effort
-effort$NObserversM[effort$EffortStatus == "OF"] <- 0 #remove observers if waypoint is marked as being off transect
+effort$NObserversM[effort$NObserversM == 1 | effort$EffortStatus == "OF"] <- 0 #to count half effort as off effort
 w <- which(effort$NObserversM == 0 & c(0, head(effort$NObserversM, -1)) == 2 | effort$NObserversM == 2 & c(0, head(effort$NObserversM, -1)) == 0)
 effort <- effort[w, ]
 effort <- effort[-nrow(effort), ]
