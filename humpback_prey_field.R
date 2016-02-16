@@ -47,9 +47,7 @@ effort      <- subset(effort, effort$datetime >= min(krill$datetime) & effort$da
 
 #effort where MI observers present
 #next zero cell included to give total time on effort
-#doesn't include changes in observers 
-#doesn't include half effort for now
-#effort <- effort[effort$NObserversM != c(tail(effort$NObserversM, -1), 2), ]
+#doesn't include changes in observers or half effort
 effort$NObserversM[effort$NObserversM == 1 | effort$EffortStatus == "OF"] <- 0 #to count half effort as off effort
 w <- which(effort$NObserversM == 0 & c(0, head(effort$NObserversM, -1)) == 2 | effort$NObserversM == 2 & c(0, head(effort$NObserversM, -1)) == 0)
 effort <- effort[w, ]
@@ -183,8 +181,6 @@ table(whale_present[!is.na(krill$arealDen)], round(krill.glm$fitted.values))
 
 #------------------------------------ SHIP HEADING ---------------------------------------#
 
-#gps doesn't take into account on effort times
-
 direction <- gps$Heading
 x <- gps$Longitude
 y <- gps$Latitude
@@ -192,6 +188,70 @@ y <- gps$Latitude
 plot(krill$Longitude, krill$Latitude)
 vectorField(direction, 1, x, y, scale = 0.005, vecspec = "deg")
 points(krill$Longitude, krill$Latitude, col = "red", pch = 19)
+
+
+#find true lat and long of sighting
+#estimate monkey island height of 25m and 0.03 degrees per 0.1 reticle
+sighting$Reticles[sighting$Reticles == 0] <- NA
+reticle_distance <- 25*tan(deg2rad(90 - sighting$Reticles/0.1*0.03))
+
+
+#if all sightings were 5km away
+
+
+sightingAngle <- function(x, gps) {
+  
+  #calculate the absolute heading of a sighting taking into account ships heading
+  #x = row of sighting
+  #gps = full gps matrix
+  
+  angle <- as.numeric(x[which(names(x) == "Angle")])
+  index <- as.numeric(x[which(names(x) == "GpsIndex")])
+  
+  if (length(gps$Heading[gps$Index == index]) > 0) {
+    
+    #lhs
+    if (angle <= 90) {
+      angle_true <- angle + gps$Heading[gps$Index == index]
+    } else {
+      angle_true <- gps$Heading[gps$Index == index] - (360 - angle)
+    }
+    
+    if(angle_true < 0) {
+      angle_true <- 360 + angle_true
+    }
+    
+  }
+  
+  return (angle_true)
+
+}
+
+
+sighting$angle_true <- apply(sighting, 1, sightingAngle, gps = gps)
+
+
+new_coord_lat <- NULL
+new_coord_lon <- NULL
+for (i in 1:nrow(sighting)) {
+  
+  if (length(gps$Longitude[gps$Index == sighting$GpsIndex[i]]) > 0) {
+    
+    new_coord_lon[i] <- destPoint(p = c(gps$Longitude[gps$Index == sighting$GpsIndex[i]], gps$Latitude[gps$Index == sighting$GpsIndex[i]]),
+                                  b = sighting$angle_true[i], d = 5000)[1]
+    
+    new_coord_lat[i] <- destPoint(p = c(gps$Longitude[gps$Index == sighting$GpsIndex[i]], gps$Latitude[gps$Index == sighting$GpsIndex[i]]),
+                                  b = sighting$angle_true[i], d = 5000)[2]
+  }
+  
+}
+
+plot(krill$Longitude, krill$Latitude, pch = 19, xlab = "Longitude", ylab = "Latitude")
+points(gps$Longitude[gps$Index %in% sighting$GpsIndex], gps$Latitude[gps$Index %in% sighting$GpsIndex], col = "red", pch = 19)
+points(new_coord_lon, new_coord_lat, col = "orange", pch = 19)
+
+
+
 
 
 
