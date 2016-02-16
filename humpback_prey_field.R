@@ -32,16 +32,6 @@ sighting <- subset(sighting, Platform == "MI")
 #plot of sightings by date
 plot(table(sighting$Date), ylab = "Number of sightings", main = "HB sightings by date") 
 
-#plot sightings along transect
-plot(krill$Longitude, krill$Latitude, type = "l", xlab = "Longitude", ylab = "Latitude")
-points(gps$Longitude[gps$Index %in% sighting$GpsIndex], gps$Latitude[gps$Index %in% sighting$GpsIndex], col = "red", pch = 19)
-
-d <- qplot(Longitude, Latitude, data=krill, colour= arealDen)
-d + scale_colour_gradient(low = "grey", high = "blue", name = "Krill density gm2") + 
-  theme_bw() +
-  geom_point(data = gps[gps$Index %in% sighting$GpsIndex & gps$Latitude < -66, ], aes(Longitude, Latitude), colour = "red", shape = 8)
-
-
 sighting$Date <- chron(dates. = as.character(sighting$Date), format = "d/m/y")
 sighting$Time <- chron(times. = as.character(sighting$Time), format = "h:m:s")
 
@@ -51,6 +41,9 @@ effort$Time <- chron(times. = as.character(effort$Time), format = "h:m:s")
 #subset sightings and effort to only krill dates
 sighting <- sighting[chron(dates. = "3/2/2015", format = "d/m/y") <= sighting$Date & sighting$Date <= chron(dates. = "6/2/2015", format = "d/m/y"), ]
 effort   <- effort[chron(dates. = "3/2/2015", format = "d/m/y") <= effort$Date & effort$Date <= chron(dates. = "6/2/2015", format = "d/m/y"), ]
+
+#remove error values
+krill$arealDen[krill$arealDen == -9.900000e+37] <- NA
 
 #effort where MI observers present
 #next zero cell included to give total time on effort
@@ -88,8 +81,6 @@ krill <- krill[!duplicated(krill), ]
 krill$Ping_date <- chron(dates. = as.character(krill$Ping_date), format = "y-m-d", out.format = "d/m/y")
 krill$Ping_time <- chron(times. = as.character(krill$Ping_time), format = "h:m:s")
 
-krill$arealDen[krill$arealDen == -9.900000e+37] <- NA #remove error values
-
 krill$datetime    <- chron(dates. = krill$Ping_date, times. = krill$Ping_time, format = c(dates = "d/m/y", times = "h:m:s"))
 sighting$datetime <- chron(dates. = sighting$Date, times. = sighting$Time, format = c(dates = "d/m/y", times = "h:m:s"))
 
@@ -116,7 +107,18 @@ krill_datetime_on_effort <- chron(dates. = substr(krill_datetime_on_effort, star
 plot(krill_datetime_on_effort, krill_on_effort, pch = 19, xlab = "Date", ylab = "krill density gm2")
 rug(sighting$datetime, ticksize = 0.03, side = 1, lwd = 0.5, col = "red", quiet = TRUE) #ticks at whale locations
 title("Krill density with whale sightings in red")
-legend("topright", col = "red", "Whale sighting location", lwd = 2, bty = "n"
+legend("topright", col = "red", "Whale sighting location", lwd = 2, bty = "n")
+
+#plot sightings along transect
+plot(krill$Longitude, krill$Latitude, type = "l", xlab = "Longitude", ylab = "Latitude")
+points(gps$Longitude[gps$Index %in% sighting$GpsIndex], gps$Latitude[gps$Index %in% sighting$GpsIndex], col = "red", pch = 19)
+
+d <- qplot(Longitude, Latitude, data=krill, colour= arealDen)
+d + scale_colour_gradient(low = "grey", high = "blue", name = "Krill density gm2") + 
+  theme_bw() +
+  geom_point(data = gps[gps$Index %in% sighting$GpsIndex & gps$Latitude < -66, ], aes(Longitude, Latitude), colour = "red", shape = 8)
+
+
 
 #------------------------ TEST KRILL DENSITY WITH AND WITHOUT WHALES ----------------------#
 
