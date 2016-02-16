@@ -118,7 +118,7 @@ krill <- onEffort(krill, start_datetime, end_datetime)
 gps   <- onEffort(gps, start_datetime, end_datetime)
 
 
-plot(krill_datetime_on_effort, krill_on_effort, pch = 19, xlab = "Date", ylab = "krill density gm2")
+plot(krill$datetime, krill$arealDen, pch = 19, xlab = "Date", ylab = "krill density gm2")
 rug(sighting$datetime, ticksize = 0.03, side = 1, lwd = 0.5, col = "red", quiet = TRUE) #ticks at whale locations
 title("Krill density with whale sightings in red")
 legend("topright", col = "red", "Whale sighting location", lwd = 2, bty = "n")
@@ -138,12 +138,12 @@ d + scale_colour_gradient(low = "grey", high = "blue", name = "Krill density gm2
 
 #does a krill cell contain a whale?
 #for each sighting, which cell is the whale closest to?
-whale_present <- rep(FALSE, length(krill_datetime_on_effort))
-whale_number  <- rep(0, length(krill_datetime_on_effort))
+whale_present <- rep(FALSE, nrow(krill))
+whale_number  <- rep(0, nrow(krill))
 sighting_id   <- NULL
 for (i in 1:nrow(sighting)) {
-  w <- which.min(abs(sighting$datetime[i] - krill_datetime_on_effort)*24*60)
-  if (abs(sighting$datetime[i] - krill_datetime_on_effort[w])*24*60 <= 15) {
+  w <- which.min(abs(sighting$datetime[i] - krill$datetime)*24*60)
+  if (abs(sighting$datetime[i] - krill$datetime[w])*24*60 <= 15) {
     whale_present[w] <- TRUE
     whale_number[w]  <- sighting$BestNumber[i]
     sighting_id[w]   <- sighting$Index[i]
@@ -151,44 +151,44 @@ for (i in 1:nrow(sighting)) {
 }
 
 #plot krill density at cells with and without whales
-boxplot(krill_on_effort ~ whale_present, ylab = "krill density gm2")
+boxplot(krill$arealDen ~ whale_present, ylab = "krill density gm2")
 legend("topright", c("TRUE = whale sighting in cell", "FALSE = no whale in cell"), bty = "n")
 
-boxplot(log(krill_on_effort) ~ whale_present, ylab = "log(krill density gm2)")
+boxplot(log(krill$arealDen) ~ whale_present, ylab = "log(krill density gm2)")
 legend("topright", c("TRUE = whale sighting in cell", "FALSE = no whale in cell"), bty = "n")
 
 #two sample t-test
 #do cells with more whales have a higher krill density?
 #log transformed because of skew
-krill_on_effort[krill_on_effort == 0] <- NA #remove single 0 value
-t.test(log(krill_on_effort[whale_present]), log(krill_on_effort[!whale_present]), alternative = "greater")
+krill$arealDen[krill$arealDen == 0] <- NA #remove single 0 value
+t.test(log(krill$arealDen[whale_present]), log(krill$arealDen[!whale_present]), alternative = "greater")
 
 #Kolmogorov-Smirnov Test for non-parametric data
 #do cells with whales present have not less than (at least equal to) the krill density where whales are absent?
 #note that specifying alternative is done in opposite way to t.test
-ks.test(krill_on_effort[whale_present], krill_on_effort[!whale_present], alternative = "less")
+ks.test(krill$arealDen[whale_present], krill$arealDen[!whale_present], alternative = "less")
 #use K-S bootstrap implementation because there are ties present
-ks.boot(krill_on_effort[whale_present], krill_on_effort[!whale_present], nboots = 1000, alternative = "less")
+ks.boot(krill$arealDen[whale_present], krill$arealDen[!whale_present], nboots = 1000, alternative = "less")
 
 #------------------------ PLOT KRILL DENSITY AGAINST NUMBER OF WHALES ----------------------#
 
 #number of whales varies between 1 and 6
-plot(krill_datetime_on_effort, krill_on_effort, pch = 19, xlab = "Date", ylab = "krill density gm2", xaxt = "n")
+plot(krill$datetime, krill$arealDen, pch = 19, xlab = "Date", ylab = "krill density gm2", xaxt = "n")
 axis(1, sighting$datetime, sighting$BestNumber, col.ticks = "red") #ticks at whale locations with number
 title("Krill density with number of whales in each sighting in red")
 legend("topright", col = "red", "Whale sighting location", lwd = 2, bty= "n")
 
-plot(krill_on_effort, whale_number, pch = 19, xlab = "Krill density gm2", ylab = "Number of whales in sighting", cex.lab = 2)
-points(na.omit(krill_on_effort[sighting_id == na.omit(sighting$Index[sighting$Behaviour == 5])]), na.omit(whale_number[sighting_id == na.omit(sighting$Index[sighting$Behaviour == 5])]), col = "red")
+plot(krill$arealDen, whale_number, pch = 19, xlab = "Krill density gm2", ylab = "Number of whales in sighting", cex.lab = 2)
+points(na.omit(krill$arealDen[sighting_id == na.omit(sighting$Index[sighting$Behaviour == 5])]), na.omit(whale_number[sighting_id == na.omit(sighting$Index[sighting$Behaviour == 5])]), col = "red")
 legend("topright", col = c("red", "black"), pch = 19, c("Feeding", "Other behaviour"), bty = "n")
 
 
 #------------------------------------ PREDICTIVE GLM --------------------------------------#
 
-krill.glm <- glm(whale_present ~ krill_on_effort, family = binomial(link = logit))
+krill.glm <- glm(whale_present ~ krill$arealDen, family = binomial(link = logit))
 summary(krill.glm)
 
-table(whale_present[!is.na(krill_on_effort)], round(krill.glm$fitted.values))
+table(whale_present[!is.na(krill$arealDen)], round(krill.glm$fitted.values))
 
 #------------------------------------ SHIP HEADING ---------------------------------------#
 
@@ -198,9 +198,9 @@ direction <- gps$Heading
 x <- gps$Longitude
 y <- gps$Latitude
 
-plot(krill_long_on_effort, krill_lat_on_effort)
+plot(krill$Longitude, krill$Latitude)
 vectorField(direction, 1, x, y, scale = 0.005, vecspec = "deg")
-points(krill_long_on_effort, krill_lat_on_effort, col = "red", pch = 19)
+points(krill$Longitude, krill$Latitude, col = "red", pch = 19)
 
 
 
