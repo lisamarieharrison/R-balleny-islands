@@ -11,8 +11,9 @@ effort   <- read.csv("Effort.csv", header = T)
 krill    <- read.csv("Krill.csv", header = T)
 library(chron)
 library(ggplot2)
-library(Matching) #K-S bootstrap
+library(Matching) #ks.boot
 library(plotrix) #vectorField
+library(geosphere) #destPoint
 
 #source required functions
 function_list <- c("gcdHF.R",
@@ -221,10 +222,12 @@ sightingAngle <- function(x, gps) {
       angle_true <- 360 + angle_true
     }
     
+  } else {
+    return (NA)
   }
   
   return (angle_true)
-
+  
 }
 
 
