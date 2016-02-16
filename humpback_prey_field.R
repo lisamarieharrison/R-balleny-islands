@@ -196,7 +196,7 @@ sighting$Reticles[sighting$Reticles == 0] <- NA
 reticle_distance <- 25*tan(deg2rad(90 - sighting$Reticles/0.1*0.03))
 
 
-#if all sightings were 5km away
+#if all sightings were 5km away where would they be on the map?
 
 
 sightingAngle <- function(x, gps) {
@@ -231,24 +231,43 @@ sightingAngle <- function(x, gps) {
 sighting$angle_true <- apply(sighting, 1, sightingAngle, gps = gps)
 
 
-new_coord_lat <- NULL
-new_coord_lon <- NULL
-for (i in 1:nrow(sighting)) {
+sightingLatLong <- function (x, gps, distance) {
   
-  if (length(gps$Longitude[gps$Index == sighting$GpsIndex[i]]) > 0) {
+  #calculates the true latitude and longitude of an object from its bearing, distance and point of observation
+  #x = row of sighting
+  #gps = full gps matrix
+  #distance = distance to object in m
+  
+  index <- as.numeric(x[which(names(x) == "GpsIndex")])
+  angle <- as.numeric(x[which(names(x) == "angle_true")])
+  
+  if (length(gps$Longitude[gps$Index == index]) > 0) {
     
-    new_coord_lon[i] <- destPoint(p = c(gps$Longitude[gps$Index == sighting$GpsIndex[i]], gps$Latitude[gps$Index == sighting$GpsIndex[i]]),
-                                  b = sighting$angle_true[i], d = 5000)[1]
+    lon <- destPoint(p = c(gps$Longitude[gps$Index == index], gps$Latitude[gps$Index == index]),
+                     b = angle, d = distance)[1]
     
-    new_coord_lat[i] <- destPoint(p = c(gps$Longitude[gps$Index == sighting$GpsIndex[i]], gps$Latitude[gps$Index == sighting$GpsIndex[i]]),
-                                  b = sighting$angle_true[i], d = 5000)[2]
+    lat <- destPoint(p = c(gps$Longitude[gps$Index == index], gps$Latitude[gps$Index == index]),
+                     b = angle, d = distance)[2]
+  } else {
+    
+    lon <- NA
+    lat <- NA
+    
   }
+  
+  return(c(lat, lon))
   
 }
 
+true_lat_long <- data.frame(t(apply(sighting, 1, sightingLatLong, gps = gps, distance = 5000)))
+colnames(true_lat_long) <- c("lat", "long")
+
+
 plot(krill$Longitude, krill$Latitude, pch = 19, xlab = "Longitude", ylab = "Latitude")
 points(gps$Longitude[gps$Index %in% sighting$GpsIndex], gps$Latitude[gps$Index %in% sighting$GpsIndex], col = "red", pch = 19)
-points(new_coord_lon, new_coord_lat, col = "orange", pch = 19)
+points(true_lat_long$lon, true_lat_long$lat, col = "orange", pch = 19)
+
+
 
 
 
