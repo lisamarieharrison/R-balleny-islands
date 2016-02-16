@@ -45,6 +45,19 @@ effort   <- effort[chron(dates. = "3/2/2015", format = "d/m/y") <= effort$Date &
 #remove error values
 krill$arealDen[krill$arealDen == -9.900000e+37] <- NA
 
+#remove duplicated krill rows
+krill <- krill[!duplicated(krill), ]
+
+#format krill times and dates to match sightings
+krill$Ping_date <- chron(dates. = as.character(krill$Ping_date), format = "y-m-d", out.format = "d/m/y")
+krill$Ping_time <- chron(times. = as.character(krill$Ping_time), format = "h:m:s")
+
+krill$datetime    <- chron(dates. = krill$Ping_date, times. = krill$Ping_time, format = c(dates = "d/m/y", times = "h:m:s"))
+sighting$datetime <- chron(dates. = sighting$Date, times. = sighting$Time, format = c(dates = "d/m/y", times = "h:m:s"))
+gps$datetime      <- chron(dates. = as.character(gps$PCTime), times. = gps$Time, format = c(dates = "d/m/y", times = "h:m:s"))
+sighting <- subset(sighting, sighting$datetime >= min(krill$datetime) & sighting$datetime <= max(krill$datetime))
+gps      <- subset(gps, gps$datetime >= min(krill$datetime) & gps$datetime <= max(krill$datetime))
+
 #effort where MI observers present
 #next zero cell included to give total time on effort
 #doesn't include changes in observers 
@@ -73,17 +86,6 @@ if (length(start_datetime) != length(end_datetime)) {
 #add 15 mins buffer to each to get full end bins
 start_datetime <- start_datetime - 15/60/24 
 end_datetime   <- end_datetime + 15/60/24
-
-#remove duplicated krill rows
-krill <- krill[!duplicated(krill), ]
-
-#format krill times and dates to match sightings
-krill$Ping_date <- chron(dates. = as.character(krill$Ping_date), format = "y-m-d", out.format = "d/m/y")
-krill$Ping_time <- chron(times. = as.character(krill$Ping_time), format = "h:m:s")
-
-krill$datetime    <- chron(dates. = krill$Ping_date, times. = krill$Ping_time, format = c(dates = "d/m/y", times = "h:m:s"))
-sighting$datetime <- chron(dates. = sighting$Date, times. = sighting$Time, format = c(dates = "d/m/y", times = "h:m:s"))
-
 
 #remove krill when off effort for whales
 krill_on_effort <- NULL
@@ -180,9 +182,9 @@ table(whale_present[!is.na(krill_on_effort)], round(krill.glm$fitted.values))
 
 #gps doesn't take into account on effort times
 
-direction <- gps$Heading[gps$PCTime %in% c("3/02/2015", "4/02/2015", "5/02/2015", "6/02/2015")]
-x <- gps$Longitude[gps$PCTime %in% c("3/02/2015", "4/02/2015", "5/02/2015", "6/02/2015")]
-y <- gps$Latitude[gps$PCTime %in% c("3/02/2015", "4/02/2015", "5/02/2015", "6/02/2015")]
+direction <- gps$Heading
+x <- gps$Longitude
+y <- gps$Latitude
 
 plot(krill_long_on_effort, krill_lat_on_effort)
 vectorField(direction, 1, x, y, scale = 0.005, vecspec = "deg")
