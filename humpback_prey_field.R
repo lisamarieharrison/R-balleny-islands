@@ -36,7 +36,7 @@ plot(table(sighting$Date), ylab = "Number of sightings", main = "HB sightings by
 plot(krill$Longitude, krill$Latitude, type = "l", xlab = "Longitude", ylab = "Latitude")
 points(gps$Longitude[gps$Index %in% sighting$GpsIndex], gps$Latitude[gps$Index %in% sighting$GpsIndex], col = "red", pch = 19)
 
-d <- qplot(Longitude, Latitude, data=krill, colour=y)
+d <- qplot(Longitude, Latitude, data=krill, colour= arealDen)
 d + scale_colour_gradient(low = "grey", high = "blue", name = "Krill density gm2") + 
   theme_bw() +
   geom_point(data = gps[gps$Index %in% sighting$GpsIndex & gps$Latitude < -66, ], aes(Longitude, Latitude), colour = "red", shape = 8)
