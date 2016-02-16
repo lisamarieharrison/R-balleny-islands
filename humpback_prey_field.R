@@ -23,11 +23,8 @@ for (f in function_list) {
   source(paste("C:/Users/43439535/Documents/Lisa/phd/Mixed models/R code/R-functions-southern-ocean/", f, sep = ""))
 }
 
-#subset sightings to only HB whales (HB = Species 07)
-sighting <- subset(sighting, Species == 07)
-
-#subset sightings to only MI platform
-sighting <- subset(sighting, Platform == "MI")
+#subset sightings to only HB whales (HB = Species 07) & to only MI platform
+sighting <- subset(sighting, Species == 07 & Platform == "MI")
 
 #plot of sightings by date
 plot(table(sighting$Date), ylab = "Number of sightings", main = "HB sightings by date") 
@@ -38,10 +35,6 @@ sighting$Time <- chron(times. = as.character(sighting$Time), format = "h:m:s")
 effort$Date <- chron(dates. = as.character(effort$Date), format = "d/m/y")
 effort$Time <- chron(times. = as.character(effort$Time), format = "h:m:s")
 
-#subset sightings and effort to only krill dates
-sighting <- sighting[chron(dates. = "3/2/2015", format = "d/m/y") <= sighting$Date & sighting$Date <= chron(dates. = "6/2/2015", format = "d/m/y"), ]
-effort   <- effort[chron(dates. = "3/2/2015", format = "d/m/y") <= effort$Date & effort$Date <= chron(dates. = "6/2/2015", format = "d/m/y"), ]
-
 #remove error values
 krill$arealDen[krill$arealDen == -9.900000e+37] <- NA
 
@@ -51,12 +44,14 @@ krill <- krill[!duplicated(krill), ]
 #format krill times and dates to match sightings
 krill$Ping_date <- chron(dates. = as.character(krill$Ping_date), format = "y-m-d", out.format = "d/m/y")
 krill$Ping_time <- chron(times. = as.character(krill$Ping_time), format = "h:m:s")
+krill$datetime  <- chron(dates. = krill$Ping_date, times. = krill$Ping_time, format = c(dates = "d/m/y", times = "h:m:s"))
 
-krill$datetime    <- chron(dates. = krill$Ping_date, times. = krill$Ping_time, format = c(dates = "d/m/y", times = "h:m:s"))
 sighting$datetime <- chron(dates. = sighting$Date, times. = sighting$Time, format = c(dates = "d/m/y", times = "h:m:s"))
+effort$datetime <- chron(dates. = as.character(effort$Date), times. = as.character(effort$Time), format = c(dates = "d/m/y", times = "h:m:s"))
 gps$datetime      <- chron(dates. = as.character(gps$PCTime), times. = gps$Time, format = c(dates = "d/m/y", times = "h:m:s"))
 sighting <- subset(sighting, sighting$datetime >= min(krill$datetime) & sighting$datetime <= max(krill$datetime))
 gps      <- subset(gps, gps$datetime >= min(krill$datetime) & gps$datetime <= max(krill$datetime))
+effort      <- subset(effort, effort$datetime >= min(krill$datetime) & effort$datetime <= max(krill$datetime))
 
 #effort where MI observers present
 #next zero cell included to give total time on effort
@@ -87,24 +82,41 @@ if (length(start_datetime) != length(end_datetime)) {
 start_datetime <- start_datetime - 15/60/24 
 end_datetime   <- end_datetime + 15/60/24
 
-#remove krill when off effort for whales
-krill_on_effort <- NULL
-krill_datetime_on_effort <- NULL
-krill_lat_on_effort <- NULL
-krill_long_on_effort <- NULL
-for (i in 1:length(start_datetime)) {
+#functions to subset to only on effort times
+withinTimes <- function(x, start, end) {
   
-  w <- start_datetime[i] < krill$datetime & end_datetime[i] > krill$datetime
+  #check if a row is between any on effort times
+  #dataRow: row of a data frame
+  #start: vector of start date and times as a chron object
+  #end: vector of end date and times as a chron object
   
-  if (sum(w) > 0) {
-    krill_on_effort <- c(krill_on_effort, krill$arealDen[w])
-    krill_datetime_on_effort <- c(krill_datetime_on_effort, as.character(krill$datetime[w]))
-    krill_lat_on_effort <- c(krill_lat_on_effort, krill$Latitude[w])
-    krill_long_on_effort <- c(krill_long_on_effort, krill$Longitude[w])
-  }
+  datetime_chron <- x[which(names(x) == "datetime")]
+  
+  datetime <- chron(dates. = substr(datetime_chron, 2, 9), times. = substr(datetime_chron, 11, 18), 
+                  format = c(dates = "d/m/y", times = "h:m:s"))
+
+  return (any(start < datetime & end > datetime)) 
   
 }
-krill_datetime_on_effort <- chron(dates. = substr(krill_datetime_on_effort, start = 2, stop = 9), times. = substr(krill_datetime_on_effort, start = 11, stop = 18), format = c(dates = "d/m/y", times = "h:m:s"))
+
+onEffort <- function(data, start, end) {
+  
+  #for every row in a data frame, check whether it is within any on effort times
+  #if FALSE, remove the row, else move on to next row
+  #data: data frame with each row an observation
+  #start: vector of start date and times as a chron object
+  #end: vector of end date and times as a chron object
+  
+  data_oneffort <- data[apply(data, 1, FUN = withinTimes, start = start_datetime, end = end_datetime), ]
+  
+  return (data_oneffort)
+  
+}
+
+#subset krill and gps to only on effort times
+krill <- onEffort(krill, start_datetime, end_datetime)
+gps   <- onEffort(gps, start_datetime, end_datetime)
+
 
 plot(krill_datetime_on_effort, krill_on_effort, pch = 19, xlab = "Date", ylab = "krill density gm2")
 rug(sighting$datetime, ticksize = 0.03, side = 1, lwd = 0.5, col = "red", quiet = TRUE) #ticks at whale locations
