@@ -263,27 +263,39 @@ sightingLatLong <- function (x, gps, distance) {
 }
 
 true_lat_long <- data.frame(t(apply(sighting, 1, sightingLatLong, gps = gps, distance = 1700)))
-colnames(true_lat_long) <- c("lat", "long")
+colnames(true_lat_long) <- c("Latitude", "Longitude")
 
 
 plot(krill$Longitude, krill$Latitude, pch = 19, xlab = "Longitude", ylab = "Latitude")
 points(gps$Longitude[gps$Index %in% sighting$GpsIndex], gps$Latitude[gps$Index %in% sighting$GpsIndex], col = "red", pch = 19)
-points(true_lat_long$lon, true_lat_long$lat, col = "orange", pch = 19)
+points(true_lat_long$Longitude, true_lat_long$Latitude, col = "orange", pch = 19)
 
 
 #--------------------------- WEIGHTED KRILL DENSITY AROUND EACH SIGHTING -------------------------------#
 
 
-distFromPoint <- function(x, krill, gps) {
+distFromPoint <- function(x, krill, gps, truePosition=FALSE) {
   
   #returns distance in kms of each krill bin from each sighting
   #x: row of sighting from apply function
   #krill: full matrix of krill locations
   #gps: gps lookup matrix for whale sightings
+  #truePosition: is the x matrix used the true position of the sighting or the observation location (default)
+  #set truePosition=TRUE if using true_lat_long with colnames "Latitude" and "Longitude"
   
   distance <- NULL
-  origin_long <- deg2rad(gps$Longitude[gps$Index == x[which(names(x) == "GpsIndex")]])
-  origin_lat  <- deg2rad(gps$Latitude[gps$Index == x[which(names(x) == "GpsIndex")]])
+  
+  if(!truePosition) {
+    
+    origin_long <- deg2rad(gps$Longitude[gps$Index == x[which(names(x) == "GpsIndex")]])
+    origin_lat  <- deg2rad(gps$Latitude[gps$Index == x[which(names(x) == "GpsIndex")]])
+    
+  } else {
+    
+    origin_long <- deg2rad(x[which(names(x) == "Longitude")])
+    origin_lat  <- deg2rad(x[which(names(x) == "Latitude")])
+    
+  }
   
   for (j in 1:length(rad_long)) {
     distance[j] <- gcdHF(origin_lat, origin_long, deg2rad(krill$Latitude)[j], deg2rad(krill$Longitude)[j])    
@@ -312,10 +324,23 @@ krillWeighted <- function(distance, threshold) {
   
 }
 
+#using observation location
 distance   <- apply(sighting, 1, FUN = distFromPoint, krill = krill, gps = gps)
 krill_mean <- krillWeighted(distance, threshold = 5)
 
 plot(krill_mean, sighting$BestNumber)
+
+#using estimated sighting location (mean sighting distance)
+
+distance   <- apply(true_lat_long, 1, FUN = distFromPoint, krill = krill, gps = gps, truePosition = TRUE)
+krill_mean <- krillWeighted(distance, threshold = 5)
+
+plot(krill_mean, sighting$BestNumber)
+
+
+
+
+
 
 
 
