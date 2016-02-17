@@ -359,7 +359,7 @@ distFromPoint <- function (x, krill, gps, truePosition=FALSE) {
   }
   
   distance[distance > 10000] <- NA
-  
+
   return(distance)
   
 }
@@ -385,7 +385,7 @@ krillWeighted <- function(distance, threshold, time) {
 
 #using observation location
 distance   <- apply(sighting, 1, FUN = distFromPoint, krill = krill, gps = gps)
-krill_mean <- krillWeighted(distance, threshold = 5)
+krill_mean <- krillWeighted(distance, threshold = 5, time = time_difference)
 
 plot(krill_mean, sighting$BestNumber, xlab = "mean krill density (gm2)", ylab = "Count in sighting")
 title("Weighted mean krill density in 5km radius around sightings")
@@ -406,9 +406,11 @@ summary(count.glm)
 
 #--------------------------- IS THERE A WHALE WITHIN 5KM? -------------------------------#
 
-#is there a whale within 5 km of a krill bin
+#is there a whale within a specified distance of a krill bin?
+distance[time > 1] <- NA #remove distances for sightings >1hr from krill bin
 whale_present <- rep(FALSE, nrow(distance))
 closest_whale <- apply(distance, 1, min, na.rm = TRUE)
+closest_whale[closest_whale == Inf] <- NA
 whale_present[closest_whale < 5] <- TRUE
 
 #plot krill density at cells with and without whales
