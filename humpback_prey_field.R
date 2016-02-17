@@ -135,7 +135,7 @@ for (i in 1:nrow(sighting)) {
   w <- which.min(abs(sighting$datetime[i] - krill$datetime)*24*60)
   if (abs(sighting$datetime[i] - krill$datetime[w])*24*60 <= 15) {
     whale_present[w] <- TRUE
-    whale_number[w]  <- sighting$BestNumber[i]
+    whale_number[w]  <- whale_number[w] + sighting$BestNumber[i]
     sighting_id[w]   <- sighting$Index[i]
   }
 }
@@ -180,8 +180,9 @@ summary(krill.glm)
 
 table(whale_present[!is.na(krill$arealDen)], round(krill.glm$fitted.values))
 
-#------------------------------------ SHIP HEADING ---------------------------------------#
+#------------------------------------ TRUE SIGHTING LOCATION ---------------------------------------#
 
+#plot ship direction
 direction <- gps$Heading
 x <- gps$Longitude
 y <- gps$Latitude
@@ -191,13 +192,13 @@ vectorField(direction, 1, x, y, scale = 0.005, vecspec = "deg")
 points(krill$Longitude, krill$Latitude, col = "red", pch = 19)
 
 
-#find true lat and long of sighting
+#find true lat and long of sighting using reticle
 #estimate monkey island height of 25m and 0.03 degrees per 0.1 reticle
 sighting$Reticles[sighting$Reticles == 0] <- NA
 reticle_distance <- 25*tan(deg2rad(90 - sighting$Reticles/0.1*0.03))
 
 
-#if all sightings were 5km away where would they be on the map?
+#sighting location given specified distance
 
 
 sightingAngle <- function(x, gps) {
@@ -230,10 +231,6 @@ sightingAngle <- function(x, gps) {
   
 }
 
-
-sighting$angle_true <- apply(sighting, 1, sightingAngle, gps = gps)
-
-
 sightingLatLong <- function (x, gps, distance) {
   
   #calculates the true latitude and longitude of an object from its bearing, distance and point of observation
@@ -262,6 +259,7 @@ sightingLatLong <- function (x, gps, distance) {
   
 }
 
+sighting$angle_true <- apply(sighting, 1, sightingAngle, gps = gps)
 true_lat_long <- data.frame(t(apply(sighting, 1, sightingLatLong, gps = gps, distance = 1700)))
 colnames(true_lat_long) <- c("Latitude", "Longitude")
 
@@ -328,14 +326,31 @@ krillWeighted <- function(distance, threshold) {
 distance   <- apply(sighting, 1, FUN = distFromPoint, krill = krill, gps = gps)
 krill_mean <- krillWeighted(distance, threshold = 5)
 
-plot(krill_mean, sighting$BestNumber)
+plot(krill_mean, sighting$BestNumber, xlab = "mean krill density (gm2)", ylab = "Count in sighting")
+title("Weighted mean krill density in 5km radius around sightings")
 
-#using estimated sighting location (mean sighting distance)
-
+#using estimated sighting location and mean sighting distance of 1700m
+sighting$angle_true <- apply(sighting, 1, sightingAngle, gps = gps)
+true_lat_long <- data.frame(t(apply(sighting, 1, sightingLatLong, gps = gps, distance = 1700)))
 distance   <- apply(true_lat_long, 1, FUN = distFromPoint, krill = krill, gps = gps, truePosition = TRUE)
 krill_mean <- krillWeighted(distance, threshold = 5)
 
-plot(krill_mean, sighting$BestNumber)
+plot(krill_mean, sighting$BestNumber, pch = 19, xlab = "mean krill density (gm2)", ylab = "Count in sighting")
+title("Weighted mean krill density in 5km radius around sightings")
+
+
+#---------------- HURDLE MODEL FOR SIGHTINGS GIVEN KRILL DENSITY -----------------#
+
+whale_count <- rep(0, length(whale_present))
+whale_count[whale_present] <- sighting$BestNumber
+
+krill.hurdle <- hurdle(whale_present ~ krill$arealDen, dist = "negbin", zero.dist = "binomial", link = "logit")
+summary(krill.hurdle)
+
+
+
+
+
 
 
 
