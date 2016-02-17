@@ -261,7 +261,7 @@ sightingAngle <- function(x, gps) {
   
 }
 
-sightingLatLong <- function (x, gps, distance) {
+sightingLatLong <- function (x, gps) {
   
   #calculates the true latitude and longitude of an object from its bearing, distance and point of observation
   #x = row of sighting
@@ -270,6 +270,7 @@ sightingLatLong <- function (x, gps, distance) {
   
   index <- as.numeric(x[which(names(x) == "GpsIndex")])
   angle <- as.numeric(x[which(names(x) == "angle_true")])
+  distance <- as.numeric(x[which(names(x) == "distance")])*1000
   
   if (length(gps$Longitude[gps$Index == index]) > 0) {
     
@@ -293,7 +294,7 @@ sightingLatLong <- function (x, gps, distance) {
 }
 
 sighting$angle_true <- apply(sighting, 1, sightingAngle, gps = gps)
-true_lat_long <- data.frame(t(apply(sighting, 1, sightingLatLong, gps = gps, distance = 1700)))
+true_lat_long <- data.frame(t(apply(sighting, 1, sightingLatLong, gps = gps)))
 
 
 plot(krill$Longitude, krill$Latitude, pch = 19, xlab = "Longitude", ylab = "Latitude")
@@ -361,9 +362,9 @@ krill_mean <- krillWeighted(distance, threshold = 5)
 plot(krill_mean, sighting$BestNumber, xlab = "mean krill density (gm2)", ylab = "Count in sighting")
 title("Weighted mean krill density in 5km radius around sightings")
 
-#using estimated sighting location and mean sighting distance of 1700m
+#using estimated sighting location
 sighting$angle_true <- apply(sighting, 1, sightingAngle, gps = gps)
-true_lat_long <- data.frame(t(apply(sighting, 1, sightingLatLong, gps = gps, distance = 1700)))
+true_lat_long <- data.frame(t(apply(sighting, 1, sightingLatLong, gps = gps)))
 distance   <- apply(true_lat_long, 1, FUN = distFromPoint, krill = krill, gps = gps, truePosition = TRUE)
 krill_mean <- krillWeighted(distance, threshold = 5)
 
