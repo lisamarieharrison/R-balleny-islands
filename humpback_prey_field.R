@@ -303,7 +303,7 @@ true_lat_long <- data.frame(t(apply(sighting, 1, sightingLatLong, gps = gps)))
 
 p <- ggplot() + geom_point(data = krill, aes(x = Longitude, y = Latitude))
 p + scaleBar(lon = 165, lat = -66.3, distanceLon = 5, distanceLat = 2, distanceLegend = 5, dist.unit = "km", orientation = FALSE) + 
-  geom_point(aes(x = gps$Longitude[gps$Index %in% sighting$GpsIndex], y = gps$Latitude[gps$Index %in% sighting$GpsIndex]), color = "red") + 
+  #geom_point(aes(x = gps$Longitude[gps$Index %in% sighting$GpsIndex], y = gps$Latitude[gps$Index %in% sighting$GpsIndex]), color = "red") + 
   geom_point(data = true_lat_long, aes(x = Longitude, y = Latitude), color = "orange") + 
   theme_bw()
 
@@ -404,14 +404,14 @@ count.glm <- glm(sighting$BestNumber ~ krill_mean, family = "poisson")
 summary(count.glm)
 
 
-#--------------------------- IS THERE A WHALE WITHIN 5KM? -------------------------------#
+#--------------------------- IS THERE A WHALE WITHIN 15KM? -------------------------------#
 
-#is there a whale within a specified distance of a krill bin?
+#is there a whale within 5km of a krill bin?
 distance[time > 1] <- NA #remove distances for sightings >1hr from krill bin
 whale_present <- rep(FALSE, nrow(distance))
 closest_whale <- apply(distance, 1, min, na.rm = TRUE)
 closest_whale[closest_whale == Inf] <- NA
-whale_present[closest_whale < 5] <- TRUE
+whale_present[closest_whale < 3] <- TRUE
 
 #plot krill density at cells with and without whales
 boxplot(krill$arealDen ~ whale_present, ylab = "krill density gm2")
@@ -437,7 +437,6 @@ krill.glm <- glm(whale_present ~ log(krill$arealDen), family = "binomial")
 summary(krill.glm)
 
 whale_estimate <- as.logical(round(krill.glm$fitted.values))
-
 table(whale_present[!is.na(krill$arealDen)], whale_estimate)
 
 sensitivity(as.factor(whale_estimate), reference = as.factor(whale_present[!is.na(krill$arealDen)]))
@@ -476,7 +475,39 @@ title("Number of whales within 5km of a krill bin")
 
 #hurdle model for count
 #significant for presence/absence but not count
-krill.hurdle <- hurdle(whale_number ~ krill$arealDen, dist = "poisson", zero.dist = "binomial", link = "logit")
+krill.hurdle <- hurdle(whale_number ~ log(krill$arealDen), dist = "poisson", zero.dist = "binomial", link = "logit")
 summary(krill.hurdle)
+
+
+#-------------------------- IS THIS CELL THE CLOSEST TO A WHALE? -----------------------------#
+
+closest_bin <- apply(distance, 2, which.min)
+closest_bin[is.na((closest_bin == Inf))] <- NA
+closest_bin <- unlist(closest_bin)
+
+closest_measured_krill <- krill$arealDen[closest_bin]
+
+whale_present <- rep(FALSE, nrow(distance))
+whale_present[closest_bin] <- TRUE
+
+whale_number <- rep(0, nrow(distance))
+whale_number[na.omit(unique(closest_bin))] <- table(closest_bin)
+
+plot(krill$arealDen, whale_number)
+
+
+closest_whale <- apply(distance, 1, min, na.rm = TRUE)
+
+plot(krill$arealDen, closest_whale)
+
+
+group <- rep(1, length(whale_present))
+arealDen <- krill$arealDen
+
+krill.glmm <- glmmPQL(whale_present ~ log(arealDen), random =~ 1|group, family = binomial, correlation = )
+summary(krill.glmm)
+
+
+
 
 
