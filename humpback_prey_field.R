@@ -9,6 +9,7 @@ sighting <- read.csv("Sighting.csv", header = T)
 env      <- read.csv("Environment.csv", header = T)
 effort   <- read.csv("Effort.csv", header = T)
 krill    <- read.csv("Krill.csv", header = T)
+reticle  <- read.csv("reticle.csv", header = T)
 library(chron)
 library(ggplot2)
 library(Matching) #ks.boot
@@ -198,9 +199,33 @@ points(krill$Longitude, krill$Latitude, col = "red", pch = 19)
 
 
 #find true lat and long of sighting using reticle
-#estimate monkey island height of 25m and 0.03 degrees per 0.1 reticle
-sighting$Reticles[sighting$Reticles == 0] <- NA
-reticle_distance <- 25*tan(deg2rad(90 - sighting$Reticles/0.1*0.03))
+#average human eye height on monkey island height is 15.08m
+
+sightingDistance <- function(x, reticle) {
+  
+  #calculates true line distance to sighting using height of monkey island and reticle lookup table
+  #x: row of sighting matrix for apply function
+  #reticle: reticle distance lookup table
+  
+  measured_reticle <- as.numeric(x[which(names(x) == "Reticles")])
+  
+  if (is.na(measured_reticle)) {
+    
+    hypotenuse <- as.numeric(x[which(names(x) == "Est.Distance")])/1000
+    
+  } else {
+    
+    hypotenuse <- reticle$km[which.min(abs(reticle$angle - measured_reticle))]
+    
+  }
+  
+  distance <- sqrt(hypotenuse^2 - 0.01508^2)
+
+  return(distance)
+  
+}
+ 
+sighting$distance <- unlist(apply(sighting, 1, sightingDistance, reticle = reticle))
 
 
 #sighting location given specified distance
@@ -348,6 +373,10 @@ title("Weighted mean krill density in 5km radius around sightings")
 #poisson glm for sighting count and density
 count.glm <- glm(sighting$BestNumber ~ krill_mean, family = "poisson")
 summary(count.glm)
+
+count.gam <- gam(sighting$BestNumber ~ krill_mean)
+summary(count.gam)
+
 
 
 
