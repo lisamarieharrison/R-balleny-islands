@@ -18,6 +18,7 @@ library(geosphere) #destPoint
 library(pscl) #hurdle
 library(caret) #sensitivity and specificity
 library(flux) #auc
+library(maptools) #gcDestination
 
 #source required functions
 function_list <- c("gcdHF.R",
@@ -120,9 +121,6 @@ title("Krill density with whale sightings in red")
 legend("topright", col = "red", "Whale sighting location", lwd = 2, bty = "n")
 
 #plot sightings along transect
-plot(krill$Longitude, krill$Latitude, type = "l", xlab = "Longitude", ylab = "Latitude")
-points(gps$Longitude[gps$Index %in% sighting$GpsIndex], gps$Latitude[gps$Index %in% sighting$GpsIndex], col = "red", pch = 19)
-
 d <- qplot(Longitude, Latitude, data=krill, colour= arealDen)
 d + scale_colour_gradient(low = "grey", high = "blue", name = "Krill density gm2") + 
   theme_bw() +
@@ -303,7 +301,7 @@ true_lat_long <- data.frame(t(apply(sighting, 1, sightingLatLong, gps = gps)))
 
 p <- ggplot() + geom_point(data = krill, aes(x = Longitude, y = Latitude))
 p + scaleBar(lon = 165, lat = -66.3, distanceLon = 5, distanceLat = 2, distanceLegend = 5, dist.unit = "km", orientation = FALSE) + 
-  #geom_point(aes(x = gps$Longitude[gps$Index %in% sighting$GpsIndex], y = gps$Latitude[gps$Index %in% sighting$GpsIndex]), color = "red") + 
+  geom_point(aes(x = gps$Longitude[gps$Index %in% sighting$GpsIndex], y = gps$Latitude[gps$Index %in% sighting$GpsIndex]), color = "red") + 
   geom_point(data = true_lat_long, aes(x = Longitude, y = Latitude), color = "orange") + 
   theme_bw()
 
@@ -329,8 +327,6 @@ timeDifference <- function (sighting, krill) {
   
 }
 
-time_difference <- timeDifference(sighting, krill)
-
 distFromPoint <- function (x, krill, gps, truePosition=FALSE) {
   
   #returns distance in kms of each krill bin from each sighting
@@ -344,8 +340,8 @@ distFromPoint <- function (x, krill, gps, truePosition=FALSE) {
   
   if(!truePosition) {
     
-    origin_long <- deg2rad(gps$Longitude[gps$Index == x[which(names(x) == "GpsIndex")]])
-    origin_lat  <- deg2rad(gps$Latitude[gps$Index == x[which(names(x) == "GpsIndex")]])
+    origin_long <- deg2rad(gps$Longitude[gps$Index == as.numeric(x[which(names(x) == "GpsIndex")])])
+    origin_lat  <- deg2rad(gps$Latitude[gps$Index == as.numeric(x[which(names(x) == "GpsIndex")])])
     
   } else {
     
@@ -354,7 +350,7 @@ distFromPoint <- function (x, krill, gps, truePosition=FALSE) {
     
   }
   
-  for (j in 1:length(rad_long)) {
+  for (j in 1:length(krill$Latitude)) {
     distance[j] <- gcdHF(origin_lat, origin_long, deg2rad(krill$Latitude)[j], deg2rad(krill$Longitude)[j])    
   }
   
@@ -383,6 +379,8 @@ krillWeighted <- function(distance, threshold, time) {
   
 }
 
+time_difference <- timeDifference(sighting, krill)
+
 #using observation location
 distance   <- apply(sighting, 1, FUN = distFromPoint, krill = krill, gps = gps)
 krill_mean <- krillWeighted(distance, threshold = 5, time = time_difference)
@@ -407,7 +405,7 @@ summary(count.glm)
 #--------------------------- IS THERE A WHALE WITHIN 15KM? -------------------------------#
 
 #is there a whale within 5km of a krill bin?
-distance[time > 1] <- NA #remove distances for sightings >1hr from krill bin
+distance[time_difference > 1] <- NA #remove distances for sightings >1hr from krill bin
 whale_present <- rep(FALSE, nrow(distance))
 closest_whale <- apply(distance, 1, min, na.rm = TRUE)
 closest_whale[closest_whale == Inf] <- NA
@@ -503,8 +501,9 @@ plot(krill$arealDen, closest_whale)
 
 group <- rep(1, length(whale_present))
 arealDen <- krill$arealDen
+arealDen[arealDen == 0] <- NA
 
-krill.glmm <- glmmPQL(whale_present ~ log(arealDen), random =~ 1|group, family = binomial, correlation = )
+krill.glmm <- glmmPQL(whale_present ~ log(arealDen), random =~ 1|group, family = binomial)
 summary(krill.glmm)
 
 
