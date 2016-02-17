@@ -260,13 +260,15 @@ sightingLatLong <- function (x, gps, distance) {
     
   }
   
-  return(c(lat, lon))
+  true_lat_long <- cbind(lat, lon)
+  names(true_lat_long) <- c("Latitude", "Longitude")
+  
+  return(true_lat_long)
   
 }
 
 sighting$angle_true <- apply(sighting, 1, sightingAngle, gps = gps)
 true_lat_long <- data.frame(t(apply(sighting, 1, sightingLatLong, gps = gps, distance = 1700)))
-colnames(true_lat_long) <- c("Latitude", "Longitude")
 
 
 plot(krill$Longitude, krill$Latitude, pch = 19, xlab = "Longitude", ylab = "Latitude")
