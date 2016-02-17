@@ -22,7 +22,8 @@ library(flux) #auc
 #source required functions
 function_list <- c("gcdHF.R",
                    "deg2rad.R",
-                   "rocCurve.R"
+                   "rocCurve.R",
+                   "draw_map_scale.R"
 )
 
 for (f in function_list) {
@@ -300,9 +301,12 @@ sighting$angle_true <- apply(sighting, 1, sightingAngle, gps = gps)
 true_lat_long <- data.frame(t(apply(sighting, 1, sightingLatLong, gps = gps)))
 
 
-plot(krill$Longitude, krill$Latitude, pch = 19, xlab = "Longitude", ylab = "Latitude")
-points(gps$Longitude[gps$Index %in% sighting$GpsIndex], gps$Latitude[gps$Index %in% sighting$GpsIndex], col = "red", pch = 19)
-points(true_lat_long$Longitude, true_lat_long$Latitude, col = "orange", pch = 19)
+p <- ggplot() + geom_point(data = krill, aes(x = Longitude, y = Latitude))
+p + scaleBar(lon = 165, lat = -66.3, distanceLon = 5, distanceLat = 2, distanceLegend = 5, dist.unit = "km", orientation = FALSE) + 
+  geom_point(aes(x = gps$Longitude[gps$Index %in% sighting$GpsIndex], y = gps$Latitude[gps$Index %in% sighting$GpsIndex]), color = "red") + 
+  geom_point(data = true_lat_long, aes(x = Longitude, y = Latitude), color = "orange") + 
+  theme_bw()
+
 
 
 #--------------------------- WEIGHTED KRILL DENSITY AROUND EACH SIGHTING -------------------------------#
