@@ -14,6 +14,7 @@ library(ggplot2)
 library(Matching) #ks.boot
 library(plotrix) #vectorField
 library(geosphere) #destPoint
+library(pscl) #hurdle
 
 #source required functions
 function_list <- c("gcdHF.R",
@@ -180,6 +181,10 @@ summary(krill.glm)
 
 table(whale_present[!is.na(krill$arealDen)], round(krill.glm$fitted.values))
 
+#hurdle model for count
+krill.hurdle <- hurdle(whale_number ~ krill$arealDen, dist = "poisson", zero.dist = "binomial", link = "logit")
+summary(krill.hurdle)
+        
 #------------------------------------ TRUE SIGHTING LOCATION ---------------------------------------#
 
 #plot ship direction
@@ -337,15 +342,6 @@ krill_mean <- krillWeighted(distance, threshold = 5)
 
 plot(krill_mean, sighting$BestNumber, pch = 19, xlab = "mean krill density (gm2)", ylab = "Count in sighting")
 title("Weighted mean krill density in 5km radius around sightings")
-
-
-#---------------- HURDLE MODEL FOR SIGHTINGS GIVEN KRILL DENSITY -----------------#
-
-whale_count <- rep(0, length(whale_present))
-whale_count[whale_present] <- sighting$BestNumber
-
-krill.hurdle <- hurdle(whale_present ~ krill$arealDen, dist = "negbin", zero.dist = "binomial", link = "logit")
-summary(krill.hurdle)
 
 
 
