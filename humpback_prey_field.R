@@ -16,10 +16,13 @@ library(Matching) #ks.boot
 library(plotrix) #vectorField
 library(geosphere) #destPoint
 library(pscl) #hurdle
+library(caret) #sensitivity and specificity
+library(flux) #auc
 
 #source required functions
 function_list <- c("gcdHF.R",
-                   "deg2rad.R"
+                   "deg2rad.R",
+                   "rocCurve.R"
 )
 
 for (f in function_list) {
@@ -378,13 +381,77 @@ summary(count.glm)
 count.gam <- gam(sighting$BestNumber ~ krill_mean)
 summary(count.gam)
 
+#--------------------------- IS THERE A WHALE WITHIN 5KM? -------------------------------#
+
+#is there a whale within 5 km of a krill bin
+whale_present <- rep(FALSE, nrow(distance))
+closest_whale <- apply(distance, 1, min, na.rm = TRUE)
+whale_present[closest_whale < 5] <- TRUE
+
+#plot krill density at cells with and without whales
+boxplot(krill$arealDen ~ whale_present, ylab = "krill density gm2")
+legend("topright", c("TRUE = whale sighting in cell", "FALSE = no whale in cell"), bty = "n")
+
+boxplot(log(krill$arealDen) ~ whale_present, ylab = "log(krill density gm2)")
+legend("topright", c("TRUE = whale sighting in cell", "FALSE = no whale in cell"), bty = "n")
+
+#two sample t-test
+#do cells with more whales have a higher krill density?
+#log transformed because of skew
+krill$arealDen[krill$arealDen == 0] <- NA #remove single 0 value
+t.test(log(krill$arealDen[whale_present]), log(krill$arealDen[!whale_present]), alternative = "greater")
+
+#Kolmogorov-Smirnov Test for non-parametric data
+#do cells with whales present have not less than (at least equal to) the krill density where whales are absent?
+#note that specifying alternative is done in opposite way to t.test
+ks.test(krill$arealDen[whale_present], krill$arealDen[!whale_present], alternative = "less")
 
 
+#glm model for presence/absence
+krill.glm <- glm(whale_present ~ log(krill$arealDen), family = "binomial")
+summary(krill.glm)
 
+whale_estimate <- as.logical(round(krill.glm$fitted.values))
 
+table(whale_present[!is.na(krill$arealDen)], whale_estimate)
 
+sensitivity(as.factor(whale_estimate), reference = as.factor(whale_present[!is.na(krill$arealDen)]))
+specificity(as.factor(whale_estimate), reference = as.factor(whale_present[!is.na(krill$arealDen)]))
 
+#plot ROC curve
+M.ROC <-rocCurve(krill.glm, threshold=0.5, data = whale_present[!is.na(krill$arealDen)]) 
 
+par(mfrow = c(1, 1), mar = c(5, 5, 1, 1))
+plot(M.ROC[1, ], M.ROC[2, ], lwd = 2, type = "l", xlab = "False Positive Rate", ylab = "True Positive Rate", cex.lab = 2, cex.axis = 2)
+title("ROC curve")
+lines(c(0, 1), c(0, 1), col = "red")
 
+#calculate the area under the ROC curve (0.5 = bad, 0.8 = good, 0.9 = excellent, 1 = perfect)
+auc(M.ROC[1,], M.ROC[2,])
+  
+  
+#number of individuals within 5km
+countIndividuals <- function (x, sighting, threshold) {
+  
+  #calculates the number of individual whales within a specified distance of each krill bin
+  #x: row of distance matrix for apply function
+  #sighting: full sighting matrix
+  #threshold: maximum distance (km) for a sighting to be included
+  
+  count <- sum(sighting$BestNumber[which(x < threshold)])
+  
+  return (count)
+  
+}
+
+whale_number <- apply(distance, 1, countIndividuals, sighting = sighting, threshold = 5)
+
+plot(krill$arealDen, whale_number, pch = 19, xlab = "krill density gm2", ylab = "number of whales")
+title("Number of whales within 5km of a krill bin")
+
+#hurdle model for count
+#significant for presence/absence but not count
+krill.hurdle <- hurdle(whale_number ~ krill$arealDen, dist = "poisson", zero.dist = "binomial", link = "logit")
+summary(krill.hurdle)
 
 
