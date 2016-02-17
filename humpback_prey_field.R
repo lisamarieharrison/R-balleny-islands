@@ -343,8 +343,9 @@ krill_mean <- krillWeighted(distance, threshold = 5)
 plot(krill_mean, sighting$BestNumber, pch = 19, xlab = "mean krill density (gm2)", ylab = "Count in sighting")
 title("Weighted mean krill density in 5km radius around sightings")
 
-
-
+#poisson glm for sighting count and density
+count.glm <- glm(sighting$BestNumber ~ krill_mean, family = "poisson")
+summary(count.glm)
 
 
 
