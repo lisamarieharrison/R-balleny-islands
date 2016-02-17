@@ -262,7 +262,7 @@ sightingLatLong <- function (x, gps, distance) {
   
 }
 
-true_lat_long <- data.frame(t(apply(sighting, 1, sightingLatLong, gps = gps, distance = 5000)))
+true_lat_long <- data.frame(t(apply(sighting, 1, sightingLatLong, gps = gps, distance = 1700)))
 colnames(true_lat_long) <- c("lat", "long")
 
 
@@ -271,9 +271,51 @@ points(gps$Longitude[gps$Index %in% sighting$GpsIndex], gps$Latitude[gps$Index %
 points(true_lat_long$lon, true_lat_long$lat, col = "orange", pch = 19)
 
 
+#--------------------------- WEIGHTED KRILL DENSITY AROUND EACH SIGHTING -------------------------------#
 
 
+distFromPoint <- function(x, krill, gps) {
+  
+  #returns distance in kms of each krill bin from each sighting
+  #x: row of sighting from apply function
+  #krill: full matrix of krill locations
+  #gps: gps lookup matrix for whale sightings
+  
+  distance <- NULL
+  origin_long <- deg2rad(gps$Longitude[gps$Index == x[which(names(x) == "GpsIndex")]])
+  origin_lat  <- deg2rad(gps$Latitude[gps$Index == x[which(names(x) == "GpsIndex")]])
+  
+  for (j in 1:length(rad_long)) {
+    distance[j] <- gcdHF(origin_lat, origin_long, deg2rad(krill$Latitude)[j], deg2rad(krill$Longitude)[j])    
+  }
+  
+  distance[distance > 10000] <- NA
+  
+  return(distance)
+  
+}
 
+krillWeighted <- function(distance, threshold) {
+  
+  #calculates the weighted mean of krill around a sighting within a specified distance interval
+  #distance: matrix of distance to each krill bin from each sighting from distFromPoint function
+  #threshold: the threshold distance in km from each sighting of krill bins to use
+  
+  krill_mean <- NULL
+  for (i in 1:ncol(distance)) {
+    weight <- 1/distance[, i]
+    weight[weight < 1/threshold] <- 0
+    krill_mean[i] <- weighted.mean(x = krill$arealDen, w = weight, na.rm = TRUE) 
+  }
+  
+  return(krill_mean)
+  
+}
+
+distance   <- apply(sighting, 1, FUN = distFromPoint, krill = krill, gps = gps)
+krill_mean <- krillWeighted(distance, threshold = 5)
+
+plot(krill_mean, sighting$BestNumber)
 
 
 
