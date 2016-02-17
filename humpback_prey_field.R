@@ -311,8 +311,27 @@ p + scaleBar(lon = 165, lat = -66.3, distanceLon = 5, distanceLat = 2, distanceL
 
 #--------------------------- WEIGHTED KRILL DENSITY AROUND EACH SIGHTING -------------------------------#
 
+timeDifference <- function (sighting, krill) {
+  
+  #calculates time in hours between each sighting and each krill bin
+  #sighting: full sighting matrix with datetime column
+  #krill: full krill matrix with datetime column
+  
+  diff_hours <- matrix(NA, nrow = nrow(krill), ncol = nrow(sighting))
+  
+  for (i in 1:length(sighting$datetime)) {
+    for (j in 1:length(krill$datetime)) {
+      diff_hours[j, i] <- abs(as.numeric(sighting$datetime[i] -  krill$datetime[j])*24)
+    }
+  }
+  
+  return(diff_hours)
+  
+}
 
-distFromPoint <- function(x, krill, gps, truePosition=FALSE) {
+time_difference <- timeDifference(sighting, krill)
+
+distFromPoint <- function (x, krill, gps, truePosition=FALSE) {
   
   #returns distance in kms of each krill bin from each sighting
   #x: row of sighting from apply function
@@ -345,16 +364,18 @@ distFromPoint <- function(x, krill, gps, truePosition=FALSE) {
   
 }
 
-krillWeighted <- function(distance, threshold) {
+krillWeighted <- function(distance, threshold, time) {
   
   #calculates the weighted mean of krill around a sighting within a specified distance interval
   #distance: matrix of distance to each krill bin from each sighting from distFromPoint function
   #threshold: the threshold distance in km from each sighting of krill bins to use
+  #time: time_difference matrix of time (hrs) between all sightings and krill bins
   
   krill_mean <- NULL
   for (i in 1:ncol(distance)) {
     weight <- 1/distance[, i]
     weight[weight < 1/threshold] <- 0
+    weight[time[, i] > 1] <- 0 #exclude krill measured >1 hr since sighting
     krill_mean[i] <- weighted.mean(x = krill$arealDen, w = weight, na.rm = TRUE) 
   }
   
@@ -373,7 +394,7 @@ title("Weighted mean krill density in 5km radius around sightings")
 sighting$angle_true <- apply(sighting, 1, sightingAngle, gps = gps)
 true_lat_long <- data.frame(t(apply(sighting, 1, sightingLatLong, gps = gps)))
 distance   <- apply(true_lat_long, 1, FUN = distFromPoint, krill = krill, gps = gps, truePosition = TRUE)
-krill_mean <- krillWeighted(distance, threshold = 5)
+krill_mean <- krillWeighted(distance, threshold = 5, time = time_difference)
 
 plot(krill_mean, sighting$BestNumber, pch = 19, xlab = "mean krill density (gm2)", ylab = "Count in sighting")
 title("Weighted mean krill density in 5km radius around sightings")
@@ -382,8 +403,6 @@ title("Weighted mean krill density in 5km radius around sightings")
 count.glm <- glm(sighting$BestNumber ~ krill_mean, family = "poisson")
 summary(count.glm)
 
-count.gam <- gam(sighting$BestNumber ~ krill_mean)
-summary(count.gam)
 
 #--------------------------- IS THERE A WHALE WITHIN 5KM? -------------------------------#
 
