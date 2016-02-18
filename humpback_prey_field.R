@@ -48,6 +48,8 @@ krill$datetime    <- chron(dates. = as.character(krill$Ping_date), times. = as.c
 sighting$datetime <- chron(dates. = as.character(sighting$Date), times. = as.character(sighting$Time), format = c(dates = "d/m/y", times = "h:m:s"))
 effort$datetime   <- chron(dates. = as.character(effort$Date), times. = as.character(effort$Time), format = c(dates = "d/m/y", times = "h:m:s"))
 gps$datetime      <- chron(dates. = as.character(gps$PCTime), times. = gps$Time, format = c(dates = "d/m/y", times = "h:m:s"))
+env$GpsTime.1     <- substr(as.POSIXct(env$GpsTime.1, format = "%I:%M:%S %p", tz = "GMT"), 12, 19)
+env$datetime      <- chron(dates. = as.character(env$Time), times. = env$GpsTime.1, format = c(dates = "d/m/y", times = "h:M:S %p"))
 
 sighting    <- subset(sighting, sighting$datetime >= min(krill$datetime) & sighting$datetime <= max(krill$datetime))
 gps         <- subset(gps, gps$datetime >= min(krill$datetime) & gps$datetime <= max(krill$datetime))
@@ -299,11 +301,12 @@ sighting$angle_true <- apply(sighting, 1, sightingAngle, gps = gps)
 true_lat_long <- data.frame(t(apply(sighting, 1, sightingLatLong, gps = gps)))
 
 
-p <- ggplot() + geom_point(data = krill, aes(x = Longitude, y = Latitude))
+p <- ggplot() + geom_point(data = krill, aes(x = Longitude, y = Latitude, size = 2))
 p + scaleBar(lon = 165, lat = -66.3, distanceLon = 5, distanceLat = 2, distanceLegend = 5, dist.unit = "km", orientation = FALSE) + 
-  geom_point(aes(x = gps$Longitude[gps$Index %in% sighting$GpsIndex], y = gps$Latitude[gps$Index %in% sighting$GpsIndex]), color = "red") + 
-  geom_point(data = true_lat_long, aes(x = Longitude, y = Latitude), color = "orange") + 
-  theme_bw()
+  #geom_point(aes(x = gps$Longitude[gps$Index %in% sighting$GpsIndex], y = gps$Latitude[gps$Index %in% sighting$GpsIndex]), color = "red") + 
+  geom_point(data = true_lat_long, aes(x = Longitude, y = Latitude, size = 2), shape = 8, color = "orange") + 
+  theme_bw() + 
+  theme(legend.position="none")
 
 
 
@@ -505,6 +508,39 @@ arealDen[arealDen == 0] <- NA
 
 krill.glmm <- glmmPQL(whale_present ~ log(arealDen), random =~ 1|group, family = binomial)
 summary(krill.glmm)
+
+
+#-------------------- PROBABILITY OF THERE BEING A SIGHTING GIVEN KRILL AND ENVIRONMENT -----------------------#
+
+
+#which environmental reading is closest to each krill?
+#each row of krill_env corresponds to a krill reading
+
+krill_env <- NULL
+for (i in 1:length(krill$datetime)) {
+  
+  krill_env <- rbind(krill_env, env[which.min(abs(as.numeric(krill$datetime[i] - env$datetime)*24)), ])
+  
+}
+
+par(mfrow = c(1, 6))
+boxplot(krill_env$Sightability ~ whale_present)
+boxplot(krill_env$SeaState~ whale_present)
+boxplot(krill_env$Swell~ whale_present)
+boxplot(krill_env$Visibility~ whale_present)
+boxplot(krill_env$CloudCover~ whale_present)
+boxplot(krill_env$Intensity~ whale_present)
+
+#only significant variables after backwards selection
+krill.glm <- glm(whale_present ~ log(arealDen) + krill_env$CloudCover, family = binomial)
+summary(krill.glm)
+
+whale_estimate <- as.logical(round(krill.glm$fitted.values))
+table(whale_present[!is.na(arealDen)], whale_estimate)
+
+
+
+
 
 
 
