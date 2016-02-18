@@ -301,13 +301,12 @@ sighting$angle_true <- apply(sighting, 1, sightingAngle, gps = gps)
 true_lat_long <- data.frame(t(apply(sighting, 1, sightingLatLong, gps = gps)))
 
 
-p <- ggplot() + geom_point(data = krill, aes(x = Longitude, y = Latitude, size = 2))
+p <- ggplot() + geom_point(data = krill, aes(x = Longitude, y = Latitude, size = 2, colour = log(arealDen)))
 p + scaleBar(lon = 165, lat = -66.3, distanceLon = 5, distanceLat = 2, distanceLegend = 5, dist.unit = "km", orientation = FALSE) + 
   #geom_point(aes(x = gps$Longitude[gps$Index %in% sighting$GpsIndex], y = gps$Latitude[gps$Index %in% sighting$GpsIndex]), color = "red") + 
   geom_point(data = true_lat_long, aes(x = Longitude, y = Latitude, size = 2), shape = 8, color = "orange") + 
-  theme_bw() + 
-  theme(legend.position="none")
-
+  theme_bw() +
+  scale_color_gradient(low="blue", high="yellow", na.value="white")
 
 
 #--------------------------- WEIGHTED KRILL DENSITY AROUND EACH SIGHTING -------------------------------#
@@ -348,8 +347,8 @@ distFromPoint <- function (x, krill, gps, truePosition=FALSE) {
     
   } else {
     
-    origin_long <- deg2rad(x[which(names(x) == "Longitude")])
-    origin_lat  <- deg2rad(x[which(names(x) == "Latitude")])
+    origin_long <- deg2rad(as.numeric(x[which(names(x) == "Longitude")]))
+    origin_lat  <- deg2rad(as.numeric(x[which(names(x) == "Latitude")]))
     
   }
   
@@ -494,20 +493,27 @@ whale_present[closest_bin] <- TRUE
 whale_number <- rep(0, nrow(distance))
 whale_number[na.omit(unique(closest_bin))] <- table(closest_bin)
 
+ks.test(krill$arealDen[whale_present], krill$arealDen[!whale_present], alternative = "less")
+
 plot(krill$arealDen, whale_number)
 
 
 closest_whale <- apply(distance, 1, min, na.rm = TRUE)
 
-plot(krill$arealDen, closest_whale)
+plot(log(krill$arealDen), closest_whale, pch = 19)
 
 
 group <- rep(1, length(whale_present))
 arealDen <- krill$arealDen
 arealDen[arealDen == 0] <- NA
+x <- krill$Latitude
+y <- krill$Longitude
 
-krill.glmm <- glmmPQL(whale_present ~ log(arealDen), random =~ 1|group, family = binomial)
+krill.glmm <- glmmPQL(whale_present ~ log(arealDen), random =~ 1|group, family = binomial, correlation =  corExp(form = ~ x + y))
 summary(krill.glmm)
+
+whale_estimate <- as.logical(round(krill.glmm$fitted.values))
+table(whale_present[!is.na(arealDen)], whale_estimate)
 
 
 #-------------------- PROBABILITY OF THERE BEING A SIGHTING GIVEN KRILL AND ENVIRONMENT -----------------------#
@@ -532,11 +538,32 @@ boxplot(krill_env$CloudCover~ whale_present)
 boxplot(krill_env$Intensity~ whale_present)
 
 #only significant variables after backwards selection
-krill.glm <- glm(whale_present ~ log(arealDen) + krill_env$CloudCover, family = binomial)
+krill.glm <- glm(whale_number ~ log(arealDen) + krill_env$CloudCover, family = binomial)
 summary(krill.glm)
 
 whale_estimate <- as.logical(round(krill.glm$fitted.values))
 table(whale_present[!is.na(arealDen)], whale_estimate)
+
+#add environmental variables to hurdle model
+krill.hurdle <- hurdle(whale_number ~ log(arealDen) + krill_env$CloudCover, dist = "poisson", zero.dist = "binomial", link = "logit")
+summary(krill.hurdle)
+
+whale_estimate <- as.logical(round(krill.hurdle$fitted.values))
+table(whale_present[!is.na(arealDen)], whale_estimate)
+
+
+#how many krill bins within 15km (on same trackline?)
+
+krill_time_difference <- timeDifference(krill, krill)
+krill_distance <- apply(krill, 1, FUN = distFromPoint, krill = krill, gps = gps, truePosition=TRUE)
+
+krill_distance[krill_time_difference > 1] <- NA #remove values from another day
+
+
+
+
+
+
 
 
 
