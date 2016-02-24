@@ -19,6 +19,7 @@ library(pscl) #hurdle
 library(caret) #sensitivity and specificity
 library(flux) #auc
 library(maptools) #gcDestination
+library(raster) 
 
 #source required functions
 function_list <- c("gcdHF.R",
@@ -116,6 +117,16 @@ onEffort <- function(data, start, end) {
 krill <- onEffort(krill, start_datetime, end_datetime)
 gps   <- onEffort(gps, start_datetime, end_datetime)
 
+#calculate time between gps readings when on effort
+gps$bin_time <- rep(NA, nrow(gps))
+for (i in 2:nrow(gps)) {
+  bin_time <- as.numeric(gps$datetime[i] - gps$datetime[i - 1])*24*60
+  
+  if (bin_time > 20) {
+    bin_time <- as.numeric(gps$datetime[i + 1] - gps$datetime[i])*24*60
+  }
+  gps$bin_time[i] <- bin_time
+}
 
 plot(krill$datetime, krill$arealDen, pch = 19, xlab = "Date", ylab = "krill density gm2")
 rug(sighting$datetime, ticksize = 0.03, side = 1, lwd = 0.5, col = "red", quiet = TRUE) #ticks at whale locations
@@ -304,7 +315,7 @@ true_lat_long <- data.frame(t(apply(sighting, 1, sightingLatLong, gps = gps)))
 p <- ggplot() + geom_point(data = krill, aes(x = Longitude, y = Latitude, size = 2, colour = log(arealDen)))
 p + scaleBar(lon = 165, lat = -66.3, distanceLon = 5, distanceLat = 2, distanceLegend = 5, dist.unit = "km", orientation = FALSE) + 
   #geom_point(aes(x = gps$Longitude[gps$Index %in% sighting$GpsIndex], y = gps$Latitude[gps$Index %in% sighting$GpsIndex]), color = "red") + 
-  geom_point(data = true_lat_long, aes(x = Longitude, y = Latitude, size = 2), shape = 8, color = "orange") + 
+  geom_point(data = true_lat_long, aes(x = Longitude, y = Latitude, size = 2), shape = 8, color = "red") + 
   theme_bw() +
   scale_color_gradient(low="blue", high="yellow", na.value="white")
 
@@ -530,12 +541,12 @@ for (i in 1:length(krill$datetime)) {
 }
 
 par(mfrow = c(1, 6))
-boxplot(krill_env$Sightability ~ whale_present)
-boxplot(krill_env$SeaState~ whale_present)
-boxplot(krill_env$Swell~ whale_present)
-boxplot(krill_env$Visibility~ whale_present)
-boxplot(krill_env$CloudCover~ whale_present)
-boxplot(krill_env$Intensity~ whale_present)
+boxplot(krill_env$Sightability ~ whale_present, main = "Sightability")
+boxplot(krill_env$SeaState~ whale_present, main = "Sea State")
+boxplot(krill_env$Swell~ whale_present, main = "Swell")
+boxplot(krill_env$Visibility~ whale_present, main = "Visibility")
+boxplot(krill_env$CloudCover~ whale_present, main = "Cloud Cover")
+boxplot(krill_env$Intensity~ whale_present, main = "Glare Intensity")
 
 #only significant variables after backwards selection
 krill.glm <- glm(whale_number ~ log(arealDen) + krill_env$CloudCover, family = binomial)
@@ -559,13 +570,113 @@ krill_distance <- apply(krill, 1, FUN = distFromPoint, krill = krill, gps = gps,
 
 krill_distance[krill_time_difference > 1] <- NA #remove values from another day
 
+#------------------------------- RASTER MAP OF KRILL AND WHALES --------------------------------- #
+
+#for each lat/long on the map, give an effort score
+#effort = 0 if no krill cells within horizon distance (13.46km)
+
+#find box size distance (km)
+km <- 10
+box_x <- round(gcdHF(deg2rad(-67.7), deg2rad(162), deg2rad(-67.7), deg2rad(165.2))/km)
+box_y <- round(gcdHF(deg2rad(-67.7), deg2rad(162), deg2rad(-66), deg2rad(162))/km)
+
+location_grid <- raster(ncol = box_x, nrow = box_y, xmn = 162, xmx = 165.2, ymn = -67.7, ymx = -66)
+
+krill$arealDen[krill$arealDen == 0] <- NA
+krill_raster <- rasterize(cbind(krill$Longitude, krill$Latitude), location_grid, (krill$arealDen), fun = mean)
+whale_raster <- rasterize(rev(true_lat_long), location_grid, rep(1, nrow(true_lat_long)), fun = sum)
+effort       <- rasterize(cbind(gps$Longitude, gps$Latitude), location_grid, gps$bin_time, fun = sum)
+sea_state    <- rasterize(cbind(krill$Longitude, krill$Latitude), location_grid, krill_env$SeaState, fun = mean)
+sightability <- rasterize(cbind(krill$Longitude, krill$Latitude), location_grid, krill_env$Sightability, fun = mean)
+cloud        <- rasterize(cbind(krill$Longitude, krill$Latitude), location_grid, krill_env$CloudCover, fun = mean)
+
+whale_zeros <- getValues(whale_raster)
+whale_zeros[!is.na(getValues(krill_raster)) & is.na(getValues(whale_raster))] <- 0
+whale_raster <- setValues(whale_raster, whale_zeros)
+
+par(mfrow = c(1, 3))
+plot(krill_raster)
+plot(whale_raster)
+plot(effort)
+
+#dist from top in km
+x <- coordinates(krill_raster)[, 1]
+y <- coordinates(krill_raster)[, 2]
+
+d <- data.frame(cbind(getValues(krill_raster), getValues(whale_raster), getValues(cloud), getValues(effort), getValues(whale_raster)/getValues(effort)*60, getValues(sea_state), getValues(sightability), x, y))
+d <- na.omit(d)
+names(d) <- c("krill", "whale", "cloud", "effort", "whales_per_hour", "sea_state", "sightability", "long", "lat")
+
+whale_pa <- d$whales_per_hour
+whale_pa[whale_pa > 0] <- 1
+
+
+#poisson hurdle model
+raster.hurdle <- hurdle(round(whales_per_hour) ~ krill + sightability + lat + long | 
+                          krill + lat - 1, dist = "poisson", zero.dist = "binomial", link = "logit", data = d)
+summary(raster.hurdle)
+
+
+plot(d$whales_per_hour, fitted(raster.hurdle))
+
+
+ilogit <- function(x) 1/(1+exp(-x))
+
+zero_fitted <- round(ilogit(d$krill * raster.hurdle$coefficients$zero[1] + d$lat * raster.hurdle$coefficients$zero[2]))
+
+table(whale_pa, zero_fitted)
+
+count_fitted <- round(exp(raster.hurdle$coefficients$count[1] + raster.hurdle$coefficients$count[2] * d$krill + raster.hurdle$coefficients$count[3] * d$sightability+ raster.hurdle$coefficients$count[4] * d$lat + raster.hurdle$coefficients$count[5] * d$long))
+count_fitted[zero_fitted == 0 | round(d$whales_per_hour) == 0] <- NA
+
+table(round(d$whales_per_hour), count_fitted)
+
+plot(round(d$whales_per_hour), count_fitted)
+
+ssq_res <- sum(na.omit(round(d$whales_per_hour) - count_fitted)^2)
+ssq_tot <- sum(na.omit(round(d$whales_per_hour) - mean(round(d$whales_per_hour)))^2)
+
+r2 <- 1 - ssq_res/ssq_tot
+r2
 
 
 
+#zero inflated poisson model
+raster.zeroinfl <- zeroinfl(round(whales_per_hour)  ~ sightability + sea_state + lat + long | krill + lat + long - 1, dist = "poisson", link = "logit", data = d)
+summary(raster.zeroinfl)
+
+plot(d$whales_per_hour, fitted(raster.zeroinfl))
+
+ssq_res <- sum(na.omit(round(d$whales_per_hour) -  round(fitted(raster.zeroinfl)))^2)
+ssq_tot <- sum(na.omit(round(d$whales_per_hour) - mean(round(d$whales_per_hour)))^2)
+
+r2 <- 1 - ssq_res/ssq_tot
+r2
+
+#poisson glm
+
+d <- data.frame(cbind(log(getValues(krill_raster)), getValues(whale_raster), getValues(cloud), getValues(effort), getValues(whale_raster)/getValues(effort)*60, getValues(sea_state), getValues(sightability), x, y))
+d <- na.omit(d)
+d <- data.frame(cbind(d[, c(2, 5)], apply(d[, -c(2, 5)], 2, FUN = scale, scale = FALSE)))
+names(d) <- c("whale", "whales_per_hour", "krill", "cloud", "effort", "sea_state", "sightability", "long", "lat")
 
 
+raster.glm <- glm(round(whales_per_hour) ~ cloud + krill + sightability + sea_state + lat + long - 1, family = "poisson", data = d)
+summary(raster.glm)
 
+plot(d$whales_per_hour, fitted(raster.glm))
 
+plot(raster.glm)
+
+ssq_res <- sum(na.omit(round(d$whales_per_hour) -  round(fitted(raster.glm)))^2)
+ssq_tot <- sum(na.omit(round(d$whales_per_hour) - mean(round(d$whales_per_hour)))^2)
+
+r2 <- 1 - ssq_res/ssq_tot
+r2
+
+vuong(raster.zeroinfl, raster.hurdle)
+
+AIC(raster.zeroinfl, raster.hurdle)
 
 
 
