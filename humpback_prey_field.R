@@ -595,9 +595,9 @@ whale_zeros[!is.na(getValues(krill_raster)) & is.na(getValues(whale_raster))] <-
 whale_raster <- setValues(whale_raster, whale_zeros)
 
 par(mfrow = c(1, 3))
-plot(krill_raster)
-plot(whale_raster)
-plot(effort)
+plot(krill_raster, main = "Mean Krill density (gm2)")
+plot(whale_raster, main = "Total whale sightings")
+plot(effort, main = "Effort - time spent in cell (mins)")
 
 #dist from top in km
 x <- coordinates(krill_raster)[, 1]
@@ -619,25 +619,20 @@ summary(raster.hurdle)
 
 plot(d$whales_per_hour, fitted(raster.hurdle))
 
-
 ilogit <- function(x) 1/(1+exp(-x))
 
 zero_fitted <- round(ilogit(d$krill * raster.hurdle$coefficients$zero[1] + d$lat * raster.hurdle$coefficients$zero[2]))
 
 table(whale_pa, zero_fitted)
 
+sensitivity(data = as.factor(zero_fitted), reference = as.factor(whale_pa), positive = "1")
+specificity(data = as.factor(zero_fitted), reference = as.factor(whale_pa), positive = "1")
+
 count_fitted <- round(exp(raster.hurdle$coefficients$count[1] + raster.hurdle$coefficients$count[2] * d$krill + raster.hurdle$coefficients$count[3] * d$sightability+ raster.hurdle$coefficients$count[4] * d$lat + raster.hurdle$coefficients$count[5] * d$long))
-count_fitted[zero_fitted == 0 | round(d$whales_per_hour) == 0] <- NA
 
-table(round(d$whales_per_hour), count_fitted)
-
-plot(round(d$whales_per_hour), count_fitted)
-
-ssq_res <- sum(na.omit(round(d$whales_per_hour) - count_fitted)^2)
-ssq_tot <- sum(na.omit(round(d$whales_per_hour) - mean(round(d$whales_per_hour)))^2)
-
-r2 <- 1 - ssq_res/ssq_tot
-r2
+par(mfrow = c(1, 1))
+count_fitted[zero_fitted == 0] <- 0
+plot(round(d$whales_per_hour), count_fitted, pch = 19, xlab = "Observed whales/hour", ylab = "Fitted")
 
 
 
@@ -661,22 +656,20 @@ d <- data.frame(cbind(d[, c(2, 5)], apply(d[, -c(2, 5)], 2, FUN = scale, scale =
 names(d) <- c("whale", "whales_per_hour", "krill", "cloud", "effort", "sea_state", "sightability", "long", "lat")
 
 
-raster.glm <- glm(round(whales_per_hour) ~ cloud + krill + sightability + sea_state + lat + long - 1, family = "poisson", data = d)
+raster.glm <- glm(round(whales_per_hour) ~ krill*lat + lat*long + sightability, family = "poisson", data = d)
 summary(raster.glm)
+
+vif(raster.glm)
 
 plot(d$whales_per_hour, fitted(raster.glm))
 
 plot(raster.glm)
 
-ssq_res <- sum(na.omit(round(d$whales_per_hour) -  round(fitted(raster.glm)))^2)
-ssq_tot <- sum(na.omit(round(d$whales_per_hour) - mean(round(d$whales_per_hour)))^2)
+table(round(d$whales_per_hour), round(fitted(raster.glm)))
 
-r2 <- 1 - ssq_res/ssq_tot
-r2
+vuong(raster.glm, raster.hurdle)
 
-vuong(raster.zeroinfl, raster.hurdle)
-
-AIC(raster.zeroinfl, raster.hurdle)
+AIC(raster.glm, raster.hurdle)
 
 
 
