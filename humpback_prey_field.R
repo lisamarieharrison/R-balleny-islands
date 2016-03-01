@@ -682,8 +682,8 @@ predicted_full <- predicted_full*getValues(effort)/60
 predicted <- setValues(predicted, predicted_full)
 
 par(mfrow = c(1, 2))
-plot(whale_raster, col=rev(terrain.colors(22)), breaks = seq(0, 22))
-plot(predicted, col=rev(terrain.colors(22)), breaks = seq(0, 22))
+plot(whale_raster, col=rev(terrain.colors(ceiling(maxValue(predicted)))), breaks = seq(0, ceiling(maxValue(predicted))))
+plot(predicted, col=rev(terrain.colors(ceiling(maxValue(predicted)))), breaks = seq(0, ceiling(maxValue(predicted))))
 
 
 plot(getValues(whale_raster), predicted_full)
