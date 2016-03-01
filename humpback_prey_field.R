@@ -675,21 +675,17 @@ AIC(raster.glm, raster.hurdle)
 
 #raster plot of observed vs predicted
 
-observed <- effort
-observed <- setValues(observed, getValues(whale_raster)/getValues(effort)*60)
-
 predicted <- effort
 predicted_full <- rep(NA, length(getValues(whale_raster)))
-predicted_full[as.numeric(names(fitted(raster.glm)))] <- fitted(raster.glm)
+predicted_full[as.numeric(names(fitted(raster.glm)))] <- round(fitted(raster.glm))
+predicted_full <- predicted_full*getValues(effort)/60
 predicted <- setValues(predicted, predicted_full)
 
 par(mfrow = c(1, 2))
-plot(observed)
-plot(predicted)
+plot(whale_raster, col=rev(terrain.colors(22)), breaks = seq(0, 22))
+plot(predicted, col=rev(terrain.colors(22)), breaks = seq(0, 22))
 
 
-
-
-
+plot(getValues(whale_raster), predicted_full)
 
 
