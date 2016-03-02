@@ -21,6 +21,7 @@ library(flux) #auc
 library(maptools) #gcDestination
 library(raster) 
 library(AER) #dispersiontest
+library(randomForest)
 
 #source required functions
 function_list <- c("gcdHF.R",
@@ -584,19 +585,23 @@ box_y <- round(gcdHF(deg2rad(-67.7), deg2rad(162), deg2rad(-66), deg2rad(162))/k
 location_grid <- raster(ncol = box_x, nrow = box_y, xmn = 162, xmx = 165.2, ymn = -67.7, ymx = -66)
 
 krill$arealDen[krill$arealDen == 0] <- NA
-krill_raster <- rasterize(cbind(krill$Longitude, krill$Latitude), location_grid, (krill$arealDen), fun = mean)
+krill_raster <- rasterize(cbind(krill$Longitude, krill$Latitude), location_grid, log(krill$arealDen), fun = mean)
 whale_raster <- rasterize(rev(true_lat_long), location_grid, rep(1, nrow(true_lat_long)), fun = sum)
 effort       <- rasterize(cbind(gps$Longitude, gps$Latitude), location_grid, gps$bin_time, fun = sum)
 sea_state    <- rasterize(cbind(krill$Longitude, krill$Latitude), location_grid, krill_env$SeaState, fun = mean)
 sightability <- rasterize(cbind(krill$Longitude, krill$Latitude), location_grid, krill_env$Sightability, fun = mean)
 cloud        <- rasterize(cbind(krill$Longitude, krill$Latitude), location_grid, krill_env$CloudCover, fun = mean)
 
+#create raster stack of predictors
+predictors <- stack(krill_raster, sea_state, sightability, cloud)
+names(predictors) <- c('krill', 'sea_state', 'sightability', 'cloud') 
+plot(predictors)
+
 whale_zeros <- getValues(whale_raster)
 whale_zeros[!is.na(getValues(krill_raster)) & is.na(getValues(whale_raster))] <- 0
 whale_raster <- setValues(whale_raster, whale_zeros)
 
-par(mfrow = c(1, 3))
-plot(krill_raster, main = "Mean Krill density (gm2)")
+par(mfrow = c(1, 2))
 plot(whale_raster, main = "Total whale sightings")
 plot(effort, main = "Effort - time spent in cell (mins)")
 
@@ -604,74 +609,49 @@ plot(effort, main = "Effort - time spent in cell (mins)")
 x <- coordinates(krill_raster)[, 1]
 y <- coordinates(krill_raster)[, 2]
 
-d <- data.frame(cbind(getValues(krill_raster), getValues(whale_raster), getValues(cloud), getValues(effort), getValues(whale_raster)/getValues(effort)*60, getValues(sea_state), getValues(sightability), x, y))
+
+d <- data.frame(cbind(getValues(whale_raster)/getValues(effort)*60, getValues(predictors), x, y))
+d <- data.frame(cbind(d[, 1], apply(d[, c(2:7)], 2, FUN = scale, scale = FALSE)))
+names(d) <- c("whales_per_hour", "krill", "sea_state", "sightability", "cloud", "long", "lat")
+d$whales_per_hour[!is.na(d$krill) & is.na(d$whales_per_hour)] <- 0
 d <- na.omit(d)
-names(d) <- c("krill", "whale", "cloud", "effort", "whales_per_hour", "sea_state", "sightability", "long", "lat")
 
-whale_pa <- d$whales_per_hour
-whale_pa[whale_pa > 0] <- 1
+whale_pa <- rep(0, nrow(d))
+whale_pa[d$whales_per_hour > 0] <- 1
 
+
+#---------------------------------- MODELS ---------------------------------#
 
 #poisson hurdle model
-raster.hurdle <- hurdle(round(whales_per_hour) ~ krill + sightability + lat + long | 
-                          krill + lat - 1, dist = "poisson", zero.dist = "binomial", link = "logit", data = d)
+raster.hurdle <- hurdle(round(whales_per_hour) ~ sightability + lat*long + cloud | 
+                     krill - 1, dist = "poisson", zero.dist = "binomial", link = "logit", data = d)
 summary(raster.hurdle)
-
-
-plot(d$whales_per_hour, fitted(raster.hurdle))
 
 ilogit <- function(x) 1/(1+exp(-x))
 
-zero_fitted <- round(ilogit(d$krill * raster.hurdle$coefficients$zero[1] + d$lat * raster.hurdle$coefficients$zero[2]))
+zero_fitted <- round(ilogit(d$krill * raster.hurdle$coefficients$zero[1]))
 
 table(whale_pa, zero_fitted)
 
 sensitivity(data = as.factor(zero_fitted), reference = as.factor(whale_pa), positive = "1")
 specificity(data = as.factor(zero_fitted), reference = as.factor(whale_pa), positive = "1")
 
-count_fitted <- round(exp(raster.hurdle$coefficients$count[1] + raster.hurdle$coefficients$count[2] * d$krill + raster.hurdle$coefficients$count[3] * d$sightability+ raster.hurdle$coefficients$count[4] * d$lat + raster.hurdle$coefficients$count[5] * d$long))
-
-par(mfrow = c(1, 1))
-count_fitted[zero_fitted == 0] <- 0
-plot(round(d$whales_per_hour), count_fitted, pch = 19, xlab = "Observed whales/hour", ylab = "Fitted")
-
-
 
 #zero inflated poisson model
-raster.zeroinfl <- zeroinfl(round(whales_per_hour)  ~ sightability + sea_state + lat + long | krill + lat + long - 1, dist = "poisson", link = "logit", data = d)
+raster.zeroinfl <- zeroinfl(round(whales_per_hour)  ~ sightability + sea_state + cloud + krill + lat*long | 
+                              krill - 1, dist = "poisson", link = "logit", data = d)
 summary(raster.zeroinfl)
 
-plot(d$whales_per_hour, fitted(raster.zeroinfl))
-
-ssq_res <- sum(na.omit(round(d$whales_per_hour) -  round(fitted(raster.zeroinfl)))^2)
-ssq_tot <- sum(na.omit(round(d$whales_per_hour) - mean(round(d$whales_per_hour)))^2)
-
-r2 <- 1 - ssq_res/ssq_tot
-r2
 
 #poisson glm
 
-d <- data.frame(cbind(log(getValues(krill_raster)), getValues(whale_raster), getValues(cloud), getValues(effort), getValues(whale_raster)/getValues(effort)*60, getValues(sea_state), getValues(sightability), x, y))
-d <- na.omit(d)
-d <- data.frame(cbind(d[, c(2, 5)], apply(d[, -c(2, 5)], 2, FUN = scale, scale = FALSE)))
-names(d) <- c("whale", "whales_per_hour", "krill", "cloud", "effort", "sea_state", "sightability", "long", "lat")
 
-
-raster.glm <- glm(round(whales_per_hour) ~ krill*lat + lat*long + sightability, family = "poisson", data = d)
+raster.glm <- glm(round(whales_per_hour) ~ krill*long + lat*long + sightability + sea_state - 1, family = "poisson", data = d)
 summary(raster.glm)
 
 vif(raster.glm)
 
-plot(d$whales_per_hour, fitted(raster.glm), pch = 19)
-
 plot(raster.glm)
-
-table(round(d$whales_per_hour), round(fitted(raster.glm)))
-
-vuong(raster.glm, raster.hurdle)
-
-AIC(raster.glm, raster.hurdle)
-
 
 dispersiontest(raster.glm) #test for overdispersion of poisson glm
 
@@ -688,35 +668,64 @@ par(mfrow = c(1, 2))
 plot(whale_raster, col=rev(terrain.colors(ceiling(maxValue(predicted)))), breaks = seq(0, ceiling(maxValue(predicted))))
 plot(predicted, col=rev(terrain.colors(ceiling(maxValue(predicted)))), breaks = seq(0, ceiling(maxValue(predicted))))
 
-#------------------------------ OVERDISPERSION ---------------------------------#
 
 #negative binomial model
 
-raster.nb <- glm.nb(round(whales_per_hour) ~ krill*lat + long - 1, data = d, maxit = 1000)
+raster.nb <- glm.nb(round(whales_per_hour) ~ krill*lat + lat*long, data = d, maxit = 1000)
 summary(raster.nb)
-
-plot(d$whales_per_hour, fitted(raster.nb), pch = 19)
-points(c(0, 100), c(0, 100), col = "red", type = "l")
 
 
 #quasipoisson
 
-raster.glm <- glm(round(whales_per_hour) ~ krill*lat + lat*long + sightability, family = "quasipoisson", data = d)
-summary(raster.glm)
+raster.qpois <- glm(round(whales_per_hour) ~ krill*long + lat + sightability + sea_state - 1, family = "quasipoisson", data = d)
+summary(raster.qpois)
 
 
-plot(d$whales_per_hour, fitted(raster.glm), pch = 19)
+#random forest 
+
+raster.rf <- randomForest(round(whales_per_hour) ~ krill + lat + long + sea_state + sightability + cloud, data = d)
+raster.rf$importance
+
+
+#------------------------------ COMPARE MODELS ---------------------------------#
+
+
+#compare log likelihoods
+
+c("hurdle" = logLik(raster.hurdle), "ZIP" =  logLik(raster.zeroinfl), "Pois" = logLik(raster.glm), "Quasi-Pois" = logLik(raster.qpois), "NB" = logLik(raster.nb))
+
+
+#compare zero counts
+
+round(c("Obs" = sum(d$whales_per_hour < 1), "hurdle" = sum(predict(raster.hurdle, type = "prob")[,1]), 
+        "ZIP" = sum(predict(raster.zeroinfl, type = "prob")[,1]),
+          "Pois" = sum(dpois(0, fitted(raster.glm))), "Quasi-Pois" = sum(dpois(0, fitted(raster.qpois))), 
+        "NB" = sum(dnbinom(0, mu = fitted(raster.nb), size = raster.nb$theta))))
+
+
+#Observed vs fitted plots
+
+par(mfrow = c(2, 3))
+
+plot(d$whales_per_hour, fitted(raster.hurdle), pch = 19, ylim = c(0, 65), main = "Hurdle")
+points(c(0, 100), c(0, 100), col = "red", type = "l")
+
+plot(d$whales_per_hour, fitted(raster.zeroinfl), ylim = c(0, 65), pch = 19, main = "ZIP")
+points(c(0, 100), c(0, 100), col = "red", type = "l")
+
+plot(d$whales_per_hour, fitted(raster.glm), pch = 19, main = "Poisson")
+points(c(0, 100), c(0, 100), col = "red", type = "l")
+
+plot(d$whales_per_hour, fitted(raster.nb), pch = 19, ylim = c(0, 65), main = "NB")
+points(c(0, 100), c(0, 100), col = "red", type = "l")
+
+plot(d$whales_per_hour, fitted(raster.qpois), pch = 19, main = "Quasi-Poisson", ylim = c(0, 65))
+points(c(0, 100), c(0, 100), col = "red", type = "l")
+
+plot(d$whales_per_hour, raster.rf$predicted, pch = 19, main = "Random Forest", ylim = c(0, 65))
 points(c(0, 100), c(0, 100), col = "red", type = "l")
 
 
-#negative binomial hurdle model
-
-raster.hurdle <- hurdle(round(whales_per_hour) ~ sightability | 
-                          krill + lat - 1, dist = "negbin", zero.dist = "binomial", link = "logit", data = d)
-summary(raster.hurdle)
-
-plot(d$whales_per_hour, fitted(raster.glm), pch = 19)
-points(c(0, 100), c(0, 100), col = "red", type = "l")
 
 
 
