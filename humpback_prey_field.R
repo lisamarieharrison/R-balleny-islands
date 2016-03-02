@@ -16,10 +16,11 @@ library(Matching) #ks.boot
 library(plotrix) #vectorField
 library(geosphere) #destPoint
 library(pscl) #hurdle
-library(caret) #sensitivity and specificity
+library(caret) #sensitivity/specificity
 library(flux) #auc
 library(maptools) #gcDestination
 library(raster) 
+library(AER) #dispersiontest
 
 #source required functions
 function_list <- c("gcdHF.R",
@@ -661,7 +662,7 @@ summary(raster.glm)
 
 vif(raster.glm)
 
-plot(d$whales_per_hour, fitted(raster.glm))
+plot(d$whales_per_hour, fitted(raster.glm), pch = 19)
 
 plot(raster.glm)
 
@@ -672,8 +673,10 @@ vuong(raster.glm, raster.hurdle)
 AIC(raster.glm, raster.hurdle)
 
 
+dispersiontest(raster.glm) #test for overdispersion of poisson glm
 
-#raster plot of observed vs predicted
+
+#raster plot of observed vs predicted on the same colour scale
 
 predicted <- effort
 predicted_full <- rep(NA, length(getValues(whale_raster)))
@@ -685,7 +688,28 @@ par(mfrow = c(1, 2))
 plot(whale_raster, col=rev(terrain.colors(ceiling(maxValue(predicted)))), breaks = seq(0, ceiling(maxValue(predicted))))
 plot(predicted, col=rev(terrain.colors(ceiling(maxValue(predicted)))), breaks = seq(0, ceiling(maxValue(predicted))))
 
+#check for zero inflation
+#if points are on a straight line no evidence of zero inflation
 
-plot(getValues(whale_raster), predicted_full)
+plot(fitted(raster.glm), fitted(raster.hurdle))
+
+density_glm <- density(fitted(raster.glm))
+density_hurdle <- density(fitted(raster.hurdle))
+
+d_pois <- dpois(round(density_glm$x), lambda = lambda)
+
+par(mfrow = c(1, 2))
+plot(d_pois, density_glm$y)
+plot(d_pois, density_hurdle$y)
+
+
+parms <- fitdistr(round(d$whales_per_hour), "poisson")
+
+lambda <- parms$estimate
+
+
+
+
+
 
 
