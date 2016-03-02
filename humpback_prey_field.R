@@ -709,6 +709,18 @@ plot(d$whales_per_hour, fitted(raster.glm), pch = 19)
 points(c(0, 100), c(0, 100), col = "red", type = "l")
 
 
+#negative binomial hurdle model
+
+raster.hurdle <- hurdle(round(whales_per_hour) ~ sightability | 
+                          krill + lat - 1, dist = "negbin", zero.dist = "binomial", link = "logit", data = d)
+summary(raster.hurdle)
+
+plot(d$whales_per_hour, fitted(raster.glm), pch = 19)
+points(c(0, 100), c(0, 100), col = "red", type = "l")
+
+
+
+
 
 
 
