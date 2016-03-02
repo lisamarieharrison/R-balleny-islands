@@ -688,25 +688,25 @@ par(mfrow = c(1, 2))
 plot(whale_raster, col=rev(terrain.colors(ceiling(maxValue(predicted)))), breaks = seq(0, ceiling(maxValue(predicted))))
 plot(predicted, col=rev(terrain.colors(ceiling(maxValue(predicted)))), breaks = seq(0, ceiling(maxValue(predicted))))
 
-#check for zero inflation
-#if points are on a straight line no evidence of zero inflation
+#------------------------------ OVERDISPERSION ---------------------------------#
 
-plot(fitted(raster.glm), fitted(raster.hurdle))
+#negative binomial model
 
-density_glm <- density(fitted(raster.glm))
-density_hurdle <- density(fitted(raster.hurdle))
+raster.nb <- glm.nb(round(whales_per_hour) ~ krill*lat + long - 1, data = d, maxit = 1000)
+summary(raster.nb)
 
-d_pois <- dpois(round(density_glm$x), lambda = lambda)
-
-par(mfrow = c(1, 2))
-plot(d_pois, density_glm$y)
-plot(d_pois, density_hurdle$y)
+plot(d$whales_per_hour, fitted(raster.nb), pch = 19)
+points(c(0, 100), c(0, 100), col = "red", type = "l")
 
 
-parms <- fitdistr(round(d$whales_per_hour), "poisson")
+#quasipoisson
 
-lambda <- parms$estimate
+raster.glm <- glm(round(whales_per_hour) ~ krill*lat + lat*long + sightability, family = "quasipoisson", data = d)
+summary(raster.glm)
 
+
+plot(d$whales_per_hour, fitted(raster.glm), pch = 19)
+points(c(0, 100), c(0, 100), col = "red", type = "l")
 
 
 
