@@ -653,7 +653,12 @@ vif(raster.glm)
 
 plot(raster.glm)
 
-dispersiontest(raster.glm) #test for overdispersion of poisson glm
+dispersiontest(raster.glm, alternative ="greater") #test for overdispersion of poisson glm
+
+
+raster.null <- glm(round(whales_per_hour) ~ 1, family = "poisson", data = d)
+anova(raster.glm, raster.null, test = "Chi") #analysis of deviance against the null model
+
 
 
 #raster plot of observed vs predicted on the same colour scale
@@ -686,7 +691,6 @@ summary(raster.qpois)
 raster.rf <- randomForest(round(whales_per_hour) ~ krill + lat + long + sea_state + sightability + cloud, data = d)
 raster.rf$importance
 
-
 #------------------------------ COMPARE MODELS ---------------------------------#
 
 
@@ -697,10 +701,11 @@ c("hurdle" = logLik(raster.hurdle), "ZIP" =  logLik(raster.zeroinfl), "Pois" = l
 
 #compare zero counts
 
-round(c("Obs" = sum(d$whales_per_hour < 1), "hurdle" = sum(predict(raster.hurdle, type = "prob")[,1]), 
-        "ZIP" = sum(predict(raster.zeroinfl, type = "prob")[,1]),
+round(c("Obs" = sum(d$whales_per_hour < 1), "hurdle" = sum(predict(raster.hurdle, type = "prob")[, 1]), 
+        "ZIP" = sum(predict(raster.zeroinfl, type = "prob")[, 1]),
           "Pois" = sum(dpois(0, fitted(raster.glm))), "Quasi-Pois" = sum(dpois(0, fitted(raster.qpois))), 
-        "NB" = sum(dnbinom(0, mu = fitted(raster.nb), size = raster.nb$theta))))
+        "NB" = sum(dnbinom(0, mu = fitted(raster.nb), size = raster.nb$theta)), 
+      "Random Forest" = sum(raster.rf$predicted < 0.5)))
 
 
 #Observed vs fitted plots
