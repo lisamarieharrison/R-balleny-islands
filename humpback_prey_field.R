@@ -620,6 +620,34 @@ whale_pa <- rep(0, nrow(d))
 whale_pa[d$whales_per_hour > 0] <- 1
 
 
+calcPA <- function (model, reference, data) {
+  
+  #function to print observed vs fitted presence/absence and sensitivity/specificity
+  #model: model object
+  #reference: reference whale_pa data set
+  
+  if (class(model)[1] == "hurdle") {
+    
+    ilogit <- function(x) 1/(1+exp(-x))
+    presence_absence <- round(ilogit(data$krill * model$coefficients$zero[1]))
+    
+    
+  } else {
+    
+    presence_absence <- round(fitted(model))
+    presence_absence[presence_absence > 0] <- 1
+    
+  }
+  
+  contingency_table <- table(reference, presence_absence, dnn = c("reference", "fitted"))
+  
+  print(contingency_table)
+  
+  cat("\n", paste("Sensitivity =", round(sensitivity(as.factor(presence_absence), as.factor(reference)), 2)))
+  cat("\n", paste("Specificity =", round(specificity(as.factor(presence_absence), as.factor(reference)), 2)))
+  
+}
+
 #---------------------------------- MODELS ---------------------------------#
 
 #poisson hurdle model
@@ -627,21 +655,14 @@ raster.hurdle <- hurdle(round(whales_per_hour) ~ sightability + lat*long + cloud
                      krill - 1, dist = "poisson", zero.dist = "binomial", link = "logit", data = d)
 summary(raster.hurdle)
 
-ilogit <- function(x) 1/(1+exp(-x))
-
-zero_fitted <- round(ilogit(d$krill * raster.hurdle$coefficients$zero[1]))
-
-table(whale_pa, zero_fitted)
-
-sensitivity(data = as.factor(zero_fitted), reference = as.factor(whale_pa), positive = "1")
-specificity(data = as.factor(zero_fitted), reference = as.factor(whale_pa), positive = "1")
-
+calcPA(raster.hurdle, whale_pa, d)
 
 #zero inflated poisson model
 raster.zeroinfl <- zeroinfl(round(whales_per_hour)  ~ sightability + sea_state + cloud + krill + lat*long | 
                               krill - 1, dist = "poisson", link = "logit", data = d)
 summary(raster.zeroinfl)
 
+calcPA(raster.zeroinfl, whale_pa, d)
 
 #poisson glm
 
@@ -651,15 +672,12 @@ summary(raster.glm)
 
 vif(raster.glm)
 
-plot(raster.glm)
-
 dispersiontest(raster.glm, alternative ="greater") #test for overdispersion of poisson glm
-
 
 raster.null <- glm(round(whales_per_hour) ~ 1, family = "poisson", data = d)
 anova(raster.glm, raster.null, test = "Chi") #analysis of deviance against the null model
 
-
+calcPA(raster.glm, whale_pa, d)
 
 #raster plot of observed vs predicted on the same colour scale
 
@@ -679,17 +697,20 @@ plot(predicted, col=rev(terrain.colors(ceiling(maxValue(predicted)))), breaks = 
 raster.nb <- glm.nb(round(whales_per_hour) ~ krill*lat + lat*long, data = d, maxit = 1000)
 summary(raster.nb)
 
+calcPA(raster.nb, whale_pa, d)
 
 #quasipoisson
 
 raster.qpois <- glm(round(whales_per_hour) ~ krill*long + lat + sightability + sea_state - 1, family = "quasipoisson", data = d)
 summary(raster.qpois)
 
+calcPA(raster.qpois, whale_pa, d)
 
 #random forest 
 
 raster.rf <- randomForest(round(whales_per_hour) ~ krill + lat + long + sea_state + sightability + cloud, data = d)
 raster.rf$importance
+
 
 #------------------------------ COMPARE MODELS ---------------------------------#
 
