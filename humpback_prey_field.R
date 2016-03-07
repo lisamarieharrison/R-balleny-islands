@@ -844,15 +844,14 @@ points(c(0, 100), c(0, 100), col = "red", type = "l")
 #plot explanatory variable coefficients geographically
 results <- as.data.frame(raster.gwr$SDF)
 
-ggplot(results, aes(x=coords.x1,y=coords.x2))+geom_point(aes(colour=krill, size = 2)) +
-  scale_colour_gradient2(low = "red", mid = "grey", high = "blue", midpoint = 0, space = "rgb", na.value = "grey50", guide = "colourbar", guide_legend(title="Krill")) + 
-  guides(size = FALSE) + 
-  theme_bw()
+plot(rasterize(cbind(results$coords.x1, results$coords.x2), location_grid, results$krill, fun = sum), main = "Krill Coef")
 
-ggplot(results, aes(x=coords.x1,y=coords.x2))+geom_point(aes(colour=cloud, size = 2)) +
-  scale_colour_gradient2(low = "red", mid = "grey", high = "blue", midpoint = 0, space = "rgb", na.value = "grey50", guide = "colourbar", guide_legend(title="Cloud")) + 
-  guides(size = FALSE) + 
-  theme_bw()
+plot(rasterize(cbind(results$coords.x1, results$coords.x2), location_grid, results$cloud, fun = sum), main = "Cloud Coef")
+
+
+
+
+
 
 
 
