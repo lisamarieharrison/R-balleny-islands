@@ -22,6 +22,7 @@ library(maptools) #gcDestination
 library(raster) 
 library(AER) #dispersiontest
 library(randomForest)
+library(spgwr)
 
 #source required functions
 function_list <- c("gcdHF.R",
@@ -609,6 +610,8 @@ plot(effort, main = "Effort - time spent in cell (mins)")
 x <- coordinates(krill_raster)[, 1]
 y <- coordinates(krill_raster)[, 2]
 
+cell_x <- colFromX(effort, x)
+cell_y <- rowFromY(effort, y)
 
 d <- data.frame(cbind(getValues(whale_raster)/getValues(effort)*60, getValues(predictors), x, y))
 d <- data.frame(cbind(d[, 1], apply(d[, c(2:7)], 2, FUN = scale, scale = FALSE)))
@@ -779,8 +782,8 @@ ggplot(ss_type, aes(value, sens, group = model, size = 2, colour = model)) +
 
 
 d <- data.frame(cbind(getValues(whale_raster), getValues(effort), getValues(predictors), x, y))
-#d <- data.frame(cbind(d[, 1], apply(d[, c(2:8)], 2, FUN = scale, scale = FALSE)))
-names(d) <- c("whales", "effort", "krill", "sea_state", "sightability", "cloud", "long", "lat")
+d <- data.frame(cbind(d[, c(1, 7, 8)], apply(d[, c(2:6)], 2, FUN = scale, scale = FALSE)))
+names(d) <- c("whales", "long", "lat", "effort", "krill", "sea_state", "sightability", "cloud")
 d <- na.omit(d)
 
 whale_pa <- rep(0, nrow(d))
@@ -808,34 +811,41 @@ diag(dists.inv) <- 0
 
 Moran.I(residuals(raster.glm), dists.inv)
 
-#calculate kernel bandwidth
-GWRbandwidth <- ggwr.sel(whales ~ krill + sea_state + cloud, data=d, longlat=TRUE,
-                        coords=cbind(d$long, d$lat), family = poisson())
 
 
-gwr.model <- ggwr(whales ~ krill + sea_state + cloud, data=d, coords=cbind(d$long, d$lat), longlat=TRUE,
-                  bandwidth=GWRbandwidth, family = poisson()) 
+
+dists <- gw.dist(cbind(d$long, d$lat), longlat = TRUE)
+
+sp.data <- SpatialPointsDataFrame(coords <- cbind(d$long, d$lat), data = d)
+
+raster.gwr.bw <- bw.ggwr(whales ~ krill, data = sp.data, adaptive = FALSE, family = "poisson",
+                      longlat = TRUE, dMat = dists)
+
+raster.gwr <- gwr.generalised(whales ~ krill, data = sp.data, bw = raster.gwr.bw, adaptive = FALSE, family = "poisson",
+          longlat = TRUE)
+raster.gwr
+
+gwr.model.fitted <- exp(d$krill*raster.gwr$SDF$krill + raster.gwr$SDF$Intercept)
 
 
-plot(d$whales, gwr.model$lm$fitted.values, pch = 19, main = "Poisson")
+par(mfrow = c(1, 2))
+
+plot(d$whales, raster.gwr$glm.res$fitted.values, pch = 19, main = "Poisson", ylim = c(0, 8))
+points(c(0, 100), c(0, 100), col = "red", type = "l")
+
+plot(d$whales, gwr.model.fitted, pch = 19, main = "Poisson", ylim = c(0, 8))
 points(c(0, 100), c(0, 100), col = "red", type = "l")
 
 
-results <- as.data.frame(gwr.model$SDF)
 
-ggplot(results, aes(x=coord.x,y=coord.y))+geom_point(aes(colour=krill, size = 2)) +
+
+results <- as.data.frame(raster.gwr$SDF)
+
+ggplot(results, aes(x=coords.x1,y=coords.x2))+geom_point(aes(colour=krill, size = 2)) +
   scale_colour_gradient2(low = "red", mid = "grey", high = "blue", midpoint = 0, space = "rgb", na.value = "grey50", guide = "colourbar", guide_legend(title="Krill")) + 
   guides(size = FALSE) + 
   theme_bw()
 
-ggplot(results, aes(x=coord.x,y=coord.y))+geom_point(aes(colour=sea_state, size = 2)) +
-  scale_colour_gradient2(low = "red", mid = "grey", high = "blue", midpoint = 0, space = "rgb", na.value = "grey50", guide = "colourbar", guide_legend(title="Sea State")) + 
-  guides(size = FALSE) + 
-  theme_bw()
 
-ggplot(results, aes(x=coord.x,y=coord.y))+geom_point(aes(colour=cloud, size = 2)) +
-  scale_colour_gradient2(low = "red", mid = "grey", high = "blue", midpoint = 0, space = "rgb", na.value = "grey50", guide = "colourbar", guide_legend(title="Cloud")) + 
-  guides(size = FALSE) + 
-  theme_bw()
 
 
