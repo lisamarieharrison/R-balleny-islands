@@ -812,33 +812,35 @@ diag(dists.inv) <- 0
 Moran.I(residuals(raster.glm), dists.inv)
 
 
-
-
 dists <- gw.dist(cbind(d$long, d$lat), longlat = TRUE)
 
 sp.data <- SpatialPointsDataFrame(coords <- cbind(d$long, d$lat), data = d)
 
-raster.gwr.bw <- bw.ggwr(whales ~ krill, data = sp.data, adaptive = FALSE, family = "poisson",
+gwr.formula <- formula(whales ~ krill + cloud - 1)
+
+#choose bandwidth
+raster.gwr.bw <- bw.ggwr(gwr.formula, data = sp.data, adaptive = FALSE, family = "poisson",
                       longlat = TRUE, dMat = dists)
 
-raster.gwr <- gwr.generalised(whales ~ krill, data = sp.data, bw = raster.gwr.bw, adaptive = FALSE, family = "poisson",
+#poisson gwr
+raster.gwr <- gwr.generalised(gwr.formula, data = sp.data, bw = raster.gwr.bw, adaptive = FALSE, family = "poisson",
           longlat = TRUE)
 raster.gwr
 
-gwr.model.fitted <- exp(d$krill*raster.gwr$SDF$krill + raster.gwr$SDF$Intercept)
+#calculate gwr fitted values
+gwr.model.fitted <- exp(d$krill*raster.gwr$SDF$krill + d$cloud*raster.gwr$SDF$cloud)
 
 
 par(mfrow = c(1, 2))
 
-plot(d$whales, raster.gwr$glm.res$fitted.values, pch = 19, main = "Poisson", ylim = c(0, 8))
+plot(d$whales, raster.gwr$glm.res$fitted.values, pch = 19, main = "GLM", ylim = c(0, 8))
 points(c(0, 100), c(0, 100), col = "red", type = "l")
 
-plot(d$whales, gwr.model.fitted, pch = 19, main = "Poisson", ylim = c(0, 8))
+plot(d$whales, gwr.model.fitted, pch = 19, main = "GWR GLM", ylim = c(0, 8))
 points(c(0, 100), c(0, 100), col = "red", type = "l")
 
 
-
-
+#plot explanatory variable coefficients geographically
 results <- as.data.frame(raster.gwr$SDF)
 
 ggplot(results, aes(x=coords.x1,y=coords.x2))+geom_point(aes(colour=krill, size = 2)) +
@@ -846,6 +848,10 @@ ggplot(results, aes(x=coords.x1,y=coords.x2))+geom_point(aes(colour=krill, size 
   guides(size = FALSE) + 
   theme_bw()
 
+ggplot(results, aes(x=coords.x1,y=coords.x2))+geom_point(aes(colour=cloud, size = 2)) +
+  scale_colour_gradient2(low = "red", mid = "grey", high = "blue", midpoint = 0, space = "rgb", na.value = "grey50", guide = "colourbar", guide_legend(title="Cloud")) + 
+  guides(size = FALSE) + 
+  theme_bw()
 
 
 
