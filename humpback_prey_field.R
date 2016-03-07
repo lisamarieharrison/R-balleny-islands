@@ -809,11 +809,11 @@ diag(dists.inv) <- 0
 Moran.I(residuals(raster.glm), dists.inv)
 
 #calculate kernel bandwidth
-GWRbandwidth <- ggwr.sel(whales ~ krill + sea_state + cloud, data=d, 
+GWRbandwidth <- ggwr.sel(whales ~ krill + sea_state + cloud, data=d, longlat=TRUE,
                         coords=cbind(d$long, d$lat), family = poisson())
 
 
-gwr.model <- ggwr(whales ~ krill + sea_state + cloud, data=d, coords=cbind(d$long, d$lat), 
+gwr.model <- ggwr(whales ~ krill + sea_state + cloud, data=d, coords=cbind(d$long, d$lat), longlat=TRUE,
                   bandwidth=GWRbandwidth, family = poisson()) 
 
 
