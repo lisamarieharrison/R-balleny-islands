@@ -22,7 +22,8 @@ library(maptools) #gcDestination
 library(raster) 
 library(AER) #dispersiontest
 library(randomForest)
-library(spgwr)
+library(GWmodel)
+library(lctools) #Moran.I
 
 #source required functions
 function_list <- c("gcdHF.R",
