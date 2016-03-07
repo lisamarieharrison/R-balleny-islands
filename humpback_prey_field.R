@@ -790,7 +790,7 @@ d <- na.omit(d)
 whale_pa <- rep(0, nrow(d))
 whale_pa[d$whales > 0] <- 1
 
-raster.glm <- glm(whales ~ krill + sea_state + cloud, family = "poisson", data = d)
+raster.glm <- glm(whales ~ krill + sea_state + cloud + sea_state, family = "poisson", data = d)
 summary(raster.glm)
 
 
@@ -817,19 +817,19 @@ dists <- gw.dist(cbind(d$long, d$lat), longlat = TRUE)
 
 sp.data <- SpatialPointsDataFrame(coords <- cbind(d$long, d$lat), data = d)
 
-gwr.formula <- formula(whales ~ krill + cloud - 1)
+gwr.formula <- formula(whales ~ krill + cloud + sea_state - 1)
 
 #choose bandwidth
 raster.gwr.bw <- bw.ggwr(gwr.formula, data = sp.data, adaptive = FALSE, family = "poisson",
-                      longlat = TRUE, dMat = dists)
+                      longlat = TRUE, dMat = dists, approach = "AIC", kernel = "gaussian")
 
 #poisson gwr
 raster.gwr <- gwr.generalised(gwr.formula, data = sp.data, bw = raster.gwr.bw, adaptive = FALSE, family = "poisson",
-          longlat = TRUE)
+          longlat = TRUE, kernel = "gaussian")
 raster.gwr
 
 #calculate gwr fitted values
-gwr.model.fitted <- exp(d$krill*raster.gwr$SDF$krill + d$cloud*raster.gwr$SDF$cloud)
+gwr.model.fitted <- exp(d$krill*raster.gwr$SDF$krill + d$cloud*raster.gwr$SDF$cloud + d$sea_state*raster.gwr$SDF$sea_state)
 
 
 par(mfrow = c(1, 2))
@@ -844,10 +844,13 @@ points(c(0, 100), c(0, 100), col = "red", type = "l")
 #plot explanatory variable coefficients geographically
 results <- as.data.frame(raster.gwr$SDF)
 
+par(mfrow = c(1, 3))
+
 plot(rasterize(cbind(results$coords.x1, results$coords.x2), location_grid, results$krill, fun = sum), main = "Krill Coef")
 
 plot(rasterize(cbind(results$coords.x1, results$coords.x2), location_grid, results$cloud, fun = sum), main = "Cloud Coef")
 
+plot(rasterize(cbind(results$coords.x1, results$coords.x2), location_grid, results$sea_state, fun = sum), main = "Sea State Coef")
 
 
 
