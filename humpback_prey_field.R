@@ -756,6 +756,7 @@ points(c(0, 100), c(0, 100), col = "red", type = "l")
 plot(d$whales_per_hour, raster.rf$predicted, pch = 19, main = "Random Forest", ylim = c(0, 65))
 points(c(0, 100), c(0, 100), col = "red", type = "l")
 
+
 #plot sensitivity and specificity for each model
 
 ss_type <- data.frame(factor(), numeric(), factor()) 
@@ -771,6 +772,63 @@ ggplot(ss_type, aes(value, sens, group = model, size = 2, colour = model)) +
   xlab("") + 
   ylab("") + 
   guides(size = FALSE)
+
+
+
+# ------------------------- GEOGRAPHICALLY WEIGHTED REGRESSION --------------------------#
+
+
+d <- data.frame(cbind(getValues(whale_raster), getValues(effort), getValues(predictors), x, y))
+#d <- data.frame(cbind(d[, 1], apply(d[, c(2:8)], 2, FUN = scale, scale = FALSE)))
+names(d) <- c("whales", "effort", "krill", "sea_state", "sightability", "cloud", "long", "lat")
+d <- na.omit(d)
+
+whale_pa <- rep(0, nrow(d))
+whale_pa[d$whales > 0] <- 1
+
+raster.glm <- glm(whales ~ krill + sea_state + cloud, family = "poisson", data = d)
+summary(raster.glm)
+
+
+dispersiontest(raster.glm, alternative ="greater") #test for overdispersion of poisson glm
+
+raster.null <- glm(whales ~ 1, family = "poisson", data = d)
+anova(raster.glm, raster.null, test = "Chi") #analysis of deviance against the null model
+
+glm.ss <- calcPA(raster.glm, whale_pa, d)
+
+plot(d$whales, fitted(raster.glm), pch = 19, main = "Poisson")
+points(c(0, 100), c(0, 100), col = "red", type = "l")
+
+#test for spatial autocorrelation using Moran's I
+
+dists <- as.matrix(dist(cbind(d$long, d$lat)))
+dists.inv <- 1/dists
+diag(dists.inv) <- 0
+
+Moran.I(residuals(raster.glm), dists.inv)
+
+#calculate kernel bandwidth
+
+GWRbandwidth <- ggwr.sel(whales ~ krill + sea_state + cloud, data=d, 
+                        coords=cbind(d$long, d$lat), family = poisson())
+
+
+gwr.model <- ggwr(whales ~ krill + sea_state + cloud, data=d, coords=cbind(d$long, d$lat), 
+                  bandwidth=GWRbandwidth, family = poisson()) 
+
+
+plot(d$whales, gwr.model$lm$fitted.values, pch = 19, main = "Poisson")
+points(c(0, 100), c(0, 100), col = "red", type = "l")
+
+
+results <- as.data.frame(gwr.model$SDF)
+
+ggplot(results, aes(x=coord.x,y=coord.y))+geom_point(aes(colour=krill, size = 2)) +
+  scale_colour_gradient2(low = "red", mid = "grey", high = "blue", midpoint = 0, space = "rgb", na.value = "grey50", guide = "colourbar", guide_legend(title="Krill")) + 
+  guides(size = FALSE) + 
+  theme_bw()
+
 
 
 
