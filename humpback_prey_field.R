@@ -809,7 +809,6 @@ diag(dists.inv) <- 0
 Moran.I(residuals(raster.glm), dists.inv)
 
 #calculate kernel bandwidth
-
 GWRbandwidth <- ggwr.sel(whales ~ krill + sea_state + cloud, data=d, 
                         coords=cbind(d$long, d$lat), family = poisson())
 
@@ -829,7 +828,14 @@ ggplot(results, aes(x=coord.x,y=coord.y))+geom_point(aes(colour=krill, size = 2)
   guides(size = FALSE) + 
   theme_bw()
 
+ggplot(results, aes(x=coord.x,y=coord.y))+geom_point(aes(colour=sea_state, size = 2)) +
+  scale_colour_gradient2(low = "red", mid = "grey", high = "blue", midpoint = 0, space = "rgb", na.value = "grey50", guide = "colourbar", guide_legend(title="Sea State")) + 
+  guides(size = FALSE) + 
+  theme_bw()
 
-
+ggplot(results, aes(x=coord.x,y=coord.y))+geom_point(aes(colour=cloud, size = 2)) +
+  scale_colour_gradient2(low = "red", mid = "grey", high = "blue", midpoint = 0, space = "rgb", na.value = "grey50", guide = "colourbar", guide_legend(title="Cloud")) + 
+  guides(size = FALSE) + 
+  theme_bw()
 
 
