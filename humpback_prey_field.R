@@ -845,13 +845,15 @@ points(c(0, 100), c(0, 100), col = "red", type = "l")
 #plot explanatory variable coefficients geographically
 results <- as.data.frame(raster.gwr$SDF)
 
-par(mfrow = c(1, 3))
+par(mfrow = c(1, length(raster.gwr$glm.res$coefficients)))
 
-plot(rasterize(cbind(results$coords.x1, results$coords.x2), location_grid, results$krill, fun = sum), main = "Krill Coef")
+for (i in names(raster.gwr$glm.res$coefficients)) {
+  
+  plot(rasterize(cbind(results$coords.x1, results$coords.x2), location_grid, results[, names(results) == i], fun = sum), main = i)
+  
+}
 
-plot(rasterize(cbind(results$coords.x1, results$coords.x2), location_grid, results$cloud, fun = sum), main = "Cloud Coef")
 
-plot(rasterize(cbind(results$coords.x1, results$coords.x2), location_grid, results$sea_state, fun = sum), main = "Sea State Coef")
 
 
 
