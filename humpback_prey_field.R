@@ -29,7 +29,8 @@ library(lctools) #Moran.I
 function_list <- c("gcdHF.R",
                    "deg2rad.R",
                    "rocCurve.R",
-                   "draw_map_scale.R"
+                   "draw_map_scale.R",
+                   "getFittedGWR.R"
 )
 
 for (f in function_list) {
@@ -829,7 +830,7 @@ raster.gwr <- gwr.generalised(gwr.formula, data = sp.data, bw = raster.gwr.bw, a
 raster.gwr
 
 #calculate gwr fitted values
-gwr.model.fitted <- exp(d$krill*raster.gwr$SDF$krill + d$cloud*raster.gwr$SDF$cloud + d$sea_state*raster.gwr$SDF$sea_state)
+gwr.model.fitted <- getFittedGWR(raster.gwr, d)
 
 
 par(mfrow = c(1, 2))
