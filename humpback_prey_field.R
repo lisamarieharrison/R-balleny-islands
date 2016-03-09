@@ -907,9 +907,9 @@ for (cell in 1:nrow(goal_coords)) {
   dist_guess <- gcdHF(deg2rad(goal_coords[cell, 2]), deg2rad(goal_coords[cell, 1]), deg2rad(true_lat_long[, 1]), deg2rad(true_lat_long[, 2]))
   
   #only check observations where guess distance is close
-  if (any(dist_guess < 20)) {
+  if (any(dist_guess < 10)) {
     
-    for (i in which(dist_guess < 20)) {
+    for (i in which(dist_guess < 10)) {
       
       tryCatch({
       shortest_path <- shortestPath(tr, cbind(goal_coords[cell, 1], goal_coords[cell, 2]), 
@@ -939,7 +939,10 @@ for (cell in 1:nrow(goal_coords)) {
   
 }
 
+interp[is.na(getValues(effort))] <- NA
+
 whale_int <- setValues(whale_int, interp)
+
 
 par(mfrow = c(1, 2))
 plot(whale_raster)
