@@ -23,7 +23,7 @@ library(raster)
 library(AER) #dispersiontest
 library(randomForest)
 library(GWmodel)
-library(lctools) #Moran.I
+library(ape) #Moran.I
 
 #source required functions
 function_list <- c("gcdHF.R",
@@ -814,18 +814,25 @@ diag(dists.inv) <- 0
 Moran.I(residuals(raster.glm), dists.inv)
 
 
+#modify distances to include path distance not shortest path
+
+
+
 dists <- gw.dist(cbind(d$long, d$lat), longlat = TRUE)
 
-sp.data <- SpatialPointsDataFrame(coords <- cbind(d$long, d$lat), data = d)
+sp.data <- SpatialPointsDataFrame(coords <- cbind(d$long, d$lat), data = d, proj4string=CRS("+proj=longlat +datum=WGS84"))
 
-gwr.formula <- formula(whales ~ krill + cloud + sea_state - 1)
+
+#best model selected using AIC
+gwr.formula <- formula(whales ~ krill + cloud + sea_state)
 
 #choose bandwidth
 raster.gwr.bw <- bw.ggwr(gwr.formula, data = sp.data, adaptive = FALSE, family = "poisson",
                       longlat = TRUE, dMat = dists, approach = "AIC", kernel = "gaussian")
 
 #poisson gwr
-raster.gwr <- gwr.generalised(gwr.formula, data = sp.data, bw = raster.gwr.bw, adaptive = FALSE, family = "poisson",
+#using fixed bandwidth of 20km to avoid crossing islands
+raster.gwr <- gwr.generalised(gwr.formula, data = sp.data, bw = 20, adaptive = FALSE, family = "poisson",
           longlat = TRUE, kernel = "gaussian")
 raster.gwr
 
@@ -835,10 +842,10 @@ gwr.model.fitted <- getFittedGWR(raster.gwr, d)
 
 par(mfrow = c(1, 2))
 
-plot(d$whales, raster.gwr$glm.res$fitted.values, pch = 19, main = "GLM", ylim = c(0, 8))
+plot(d$whales, raster.gwr$glm.res$fitted.values, pch = 19, main = "GLM", ylim = c(0, max(d$whales)))
 points(c(0, 100), c(0, 100), col = "red", type = "l")
 
-plot(d$whales, gwr.model.fitted, pch = 19, main = "GWR GLM", ylim = c(0, 8))
+plot(d$whales, gwr.model.fitted, pch = 19, main = "GWR GLM", ylim = c(0, max(d$whales)))
 points(c(0, 100), c(0, 100), col = "red", type = "l")
 
 
@@ -853,11 +860,88 @@ for (i in names(raster.gwr$glm.res$coefficients)) {
   
 }
 
+loc.sp <- SpatialPointsDataFrame(coords <- cbind(x, y), data = data.frame(rep(1, length(x))))
+
+#plot of Balleny Islands
+
+library(maps)
+library(mapdata)
+library(ipdw)
+
+balleny_map <- map("world2Hires", regions=c("Antarctica:Young Island", "Antarctica:Buckle Island", "Antarctica:Sturge Island"))
+balleny_poly <- map2SpatialPolygons(balleny_map, IDs = balleny_map$names, proj4string=CRS("+proj=longlat +datum=WGS84"))
 
 
+km <- 10
+box_x <- round(gcdHF(deg2rad(-67.7), deg2rad(162), deg2rad(-67.7), deg2rad(165.2))/km)
+box_y <- round(gcdHF(deg2rad(-67.7), deg2rad(162), deg2rad(-66), deg2rad(162))/km)
+
+location_grid <- raster(ncol = box_x, nrow = box_y, xmn = 162, xmx = 165.2, ymn = -67.7, ymx = -66)
 
 
+sp.data <- SpatialPointsDataFrame(coords <- na.omit(rev(true_lat_long)), data = data.frame(rep(1, nrow(na.omit(true_lat_long)))), proj4string=CRS("+proj=longlat +datum=WGS84"))
+names(sp.data) <- "whales"
+
+whale_int <- ipdw(sp.data, costras, range = 1, paramlist = "whales")
+
+par(mfrow = c(1, 2))
+plot(whale_raster)
+plot(whale_int)
+
+costras <- rasterize(balleny_poly, location_grid, field = 1, background = 10000)
+tr <- transition(costras, transitionFunction = mean, 8)
+tr <- geoCorrection(tr, type="c")
+
+#interpolation around islands
+
+#10km grid centered at goal_coords
+goal_coords <- coordinates(island)[getValues(island == 10000), ]
+
+#dist from goal coords to each data point
+
+true_lat_long <- na.omit(true_lat_long)
+
+dist_mat <- matrix(NA, nrow = nrow(goal_coords), ncol = nrow(true_lat_long))
+for (cell in 1:nrow(goal_coords)) {
+  
+  dist_guess <- gcdHF(deg2rad(goal_coords[cell, 2]), deg2rad(goal_coords[cell, 1]), deg2rad(true_lat_long[, 1]), deg2rad(true_lat_long[, 2]))
+  
+  #only check observations where guess distance is close
+  if (any(dist_guess < 20)) {
+    
+    for (i in which(dist_guess < 20)) {
+      
+      tryCatch({
+      shortest_path <- shortestPath(tr, cbind(goal_coords[cell, 1], goal_coords[cell, 2]), 
+                                    as.matrix(rev(true_lat_long[i, ]), ncol = 2), "SpatialLines")
+      dist_mat[cell, i] <- SpatialLinesLengths(shortest_path)
+      }, error = function(e) {
+        print("ERROR: Looks like we got an error, skipping point")
+        shortest_path <- NA
+      })
+      
+    }
+  }
+}
 
 
+#interpolate for whales
+whale_int <- location_grid
 
+interp <- NULL
+for (cell in 1:nrow(goal_coords)) {
+  
+  w <- which(x == goal_coords[cell, 1] & y == goal_coords[cell, 2])
+  
+  include <- na.omit(dist_mat[cell, ][dist_mat[cell, ] <= 5])
+  
+  interp[w] <- length(include)
+  
+}
+
+whale_int <- setValues(whale_int, interp)
+
+par(mfrow = c(1, 2))
+plot(whale_raster)
+plot(whale_int)
 
