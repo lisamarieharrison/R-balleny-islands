@@ -871,22 +871,19 @@ library(ipdw)
 balleny_map <- map("world2Hires", regions=c("Antarctica:Young Island", "Antarctica:Buckle Island", "Antarctica:Sturge Island"))
 balleny_poly <- map2SpatialPolygons(balleny_map, IDs = balleny_map$names, proj4string=CRS("+proj=longlat +datum=WGS84"))
 
-
+#set up goal resolution
 km <- 10
+box_x <- round(gcdHF(deg2rad(-67.7), deg2rad(162), deg2rad(-67.7), deg2rad(165.2))/km)
+box_y <- round(gcdHF(deg2rad(-67.7), deg2rad(162), deg2rad(-66), deg2rad(162))/km)
+location_grid <- raster(ncol = box_x, nrow = box_y, xmn = 162, xmx = 165.2, ymn = -67.7, ymx = -66)
+island <- rasterize(balleny_poly, location_grid, field = 1, background = 10000)
+
+#set up shortest path resolution
+km <- 1
 box_x <- round(gcdHF(deg2rad(-67.7), deg2rad(162), deg2rad(-67.7), deg2rad(165.2))/km)
 box_y <- round(gcdHF(deg2rad(-67.7), deg2rad(162), deg2rad(-66), deg2rad(162))/km)
 
 location_grid <- raster(ncol = box_x, nrow = box_y, xmn = 162, xmx = 165.2, ymn = -67.7, ymx = -66)
-
-
-sp.data <- SpatialPointsDataFrame(coords <- na.omit(rev(true_lat_long)), data = data.frame(rep(1, nrow(na.omit(true_lat_long)))), proj4string=CRS("+proj=longlat +datum=WGS84"))
-names(sp.data) <- "whales"
-
-whale_int <- ipdw(sp.data, costras, range = 1, paramlist = "whales")
-
-par(mfrow = c(1, 2))
-plot(whale_raster)
-plot(whale_int)
 
 costras <- rasterize(balleny_poly, location_grid, field = 1, background = 10000)
 tr <- transition(costras, transitionFunction = mean, 8)
@@ -926,7 +923,8 @@ for (cell in 1:nrow(goal_coords)) {
 
 
 #interpolate for whales
-whale_int <- location_grid
+whale_int <- island
+whale_int <- setValues(whale_int, rep(NA, nrow(coordinates(whale_int))))
 
 interp <- NULL
 for (cell in 1:nrow(goal_coords)) {
@@ -946,5 +944,12 @@ whale_int <- setValues(whale_int, interp)
 
 par(mfrow = c(1, 2))
 plot(whale_raster)
+plot(balleny_poly, add = TRUE)
 plot(whale_int)
+plot(balleny_poly, add = TRUE)
+
+#need to remove cells that are >50% on the island
+
+
+
 
