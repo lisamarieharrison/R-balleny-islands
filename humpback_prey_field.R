@@ -30,7 +30,8 @@ function_list <- c("gcdHF.R",
                    "deg2rad.R",
                    "rocCurve.R",
                    "draw_map_scale.R",
-                   "getFittedGWR.R"
+                   "getFittedGWR.R",
+                   "calcPA.R"
 )
 
 for (f in function_list) {
@@ -625,39 +626,6 @@ whale_pa <- rep(0, nrow(d))
 whale_pa[d$whales_per_hour > 0] <- 1
 
 
-calcPA <- function (model, reference, data) {
-  
-  #function to print observed vs fitted presence/absence and sensitivity/specificity
-  #model: model object
-  #reference: reference whale_pa data set
-  
-  if (class(model)[1] == "hurdle") {
-    
-    ilogit <- function(x) 1/(1+exp(-x))
-    presence_absence <- round(ilogit(data$krill * model$coefficients$zero[1]))
-    
-    
-  } else {
-    
-    presence_absence <- round(fitted(model))
-    presence_absence[presence_absence > 0] <- 1
-    
-  }
-  
-  contingency_table <- table(reference, presence_absence, dnn = c("reference", "fitted"))
-  
-  print(contingency_table)
-  
-  sens <- round(sensitivity(as.factor(presence_absence), as.factor(reference)), 2)
-  spec <- round(specificity(as.factor(presence_absence), as.factor(reference)), 2)
-  
-  cat("\n", paste("Sensitivity =", sens))
-  cat("\n", paste("Specificity =", spec))
-  
-  return(list("Sensitivity" = sens, "Specificity" = spec))
-  
-}
-
 #---------------------------------- MODELS ---------------------------------#
 
 #poisson hurdle model
@@ -1031,7 +999,7 @@ whale_pa[d$whales > 0] <- 1
 
 #glm
 
-raster.glm <- glm(whales ~ krill + cloud, family = "poisson", data = d)
+raster.glm <- glm(whales ~ krill + cloud + sea_state, family = "poisson", data = d)
 summary(raster.glm)
 
 
@@ -1045,14 +1013,13 @@ sp.data <- SpatialPointsDataFrame(coords <- cbind(d$long, d$lat), data = d, proj
 
 
 #best model selected using AIC
-gwr.formula <- formula(whales ~ krill + cloud)
+gwr.formula <- formula(whales ~ krill + cloud + sea_state)
 
 #choose bandwidth
 raster.gwr.bw <- bw.ggwr(gwr.formula, data = sp.data, adaptive = FALSE, family = "poisson",
                          longlat = TRUE, dMat = dists, approach = "AIC", kernel = "gaussian")
 
 #poisson gwr
-#using fixed bandwidth of 20km to avoid crossing islands
 raster.gwr <- gwr.generalised(gwr.formula, data = sp.data, bw = raster.gwr.bw, adaptive = FALSE, family = "poisson",
                               longlat = TRUE, kernel = "gaussian")
 raster.gwr
@@ -1077,7 +1044,7 @@ par(mfrow = c(1, length(raster.gwr$glm.res$coefficients)))
 
 for (i in names(raster.gwr$glm.res$coefficients)) {
   
-  plot(rasterize(cbind(results$coords.x1, results$coords.x2), island, exp(results[, names(results) == i]), fun = sum), main = i)
+  plot(rasterize(cbind(results$coords.x1, results$coords.x2), location_grid, exp(results[, names(results) == i]), fun = sum), main = i)
   
 }
 
@@ -1104,30 +1071,33 @@ cloud        <- rasterize(cbind(krill$Longitude, krill$Latitude), location_grid,
 
 
    
-removeOverlap <- function(rast, poly) {
+removeOverlap <- function(rast, poly, allowance) {
+  
   poly_overlap <- getValues(rasterize(poly, rast, getCover=TRUE))
   remove_overlap <- getValues(rast)
-  remove_overlap[poly_overlap >= 40] <- NA
+  remove_overlap[poly_overlap >= allowance] <- NA
   rast <- setValues(rast, remove_overlap)
   return (rast)
+  
 }
 
-krill_raster <- removeOverlap(krill_raster, balleny_poly)
-whale_raster <- removeOverlap(whale_raster, balleny_poly)
-effort <- removeOverlap(effort, balleny_poly)
-sea_state <- removeOverlap(sea_state, balleny_poly)
-sightability <- removeOverlap(sightability, balleny_poly)
-cloud <- removeOverlap(cloud, balleny_poly)
+allowance <- 20
+
+krill_raster <- removeOverlap(krill_raster, balleny_poly, allowance)
+whale_raster <- removeOverlap(whale_raster, balleny_poly, allowance)
+effort <- removeOverlap(effort, balleny_poly, allowance)
+sea_state <- removeOverlap(sea_state, balleny_poly, allowance)
+sightability <- removeOverlap(sightability, balleny_poly, allowance)
+cloud <- removeOverlap(cloud, balleny_poly, allowance)
 
 
 
 #create raster stack of predictors
 predictors <- stack(krill_raster, sea_state, sightability, cloud)
 names(predictors) <- c('krill', 'sea_state', 'sightability', 'cloud') 
-plot(predictors)
 
 whale_zeros <- getValues(whale_raster)
-whale_zeros[!is.na(getValues(krill_raster)) & is.na(getValues(whale_raster))] <- 0
+whale_zeros[!is.na(getValues(effort)) & is.na(getValues(whale_raster))] <- 0
 whale_raster <- setValues(whale_raster, whale_zeros)
 
 
