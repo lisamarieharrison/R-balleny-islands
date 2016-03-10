@@ -903,6 +903,9 @@ true_lat_long <- na.omit(true_lat_long)
 
 distToCell <- function(goal_coordinates, observation_coordinates, transition_layer) {
   
+  #goal_coordinates: matrix of goal coordinates (lat, long) for final raster cells. Cells over island ommited
+  #observation coordinates: matrix of all observation coordinates (lat, long)
+  #transition_layer: Transition layer object for cost of transition between cells
   
   dist_mat <- matrix(NA, nrow = nrow(goal_coordinates), ncol = nrow(observation_coordinates))
   
@@ -912,9 +915,9 @@ distToCell <- function(goal_coordinates, observation_coordinates, transition_lay
     dist_guess <- gcdHF(deg2rad(goal_coordinates[cell, 2]), deg2rad(goal_coordinates[cell, 1]), deg2rad(observation_coordinates[, 1]), deg2rad(observation_coordinates[, 2]))
     
     #only check observations where guess distance is close
-    if (any(dist_guess < 8)) {
+    if (any(dist_guess < 4)) {
       
-      for (i in which(dist_guess < 8)) {
+      for (i in which(dist_guess < 4)) {
         
         tryCatch({
           shortest_path <- shortestPath(transition_layer, cbind(goal_coordinates[cell, 1], goal_coordinates[cell, 2]), 
@@ -936,6 +939,12 @@ distToCell <- function(goal_coordinates, observation_coordinates, transition_lay
 
 interpolateWithBarriers <- function(dist_mat, goal_coordinates, reference_grid, FUN, dat = NULL) {
   
+  #dist_mat: matrix of distance of each goal coordinate to each observation from distToCell function
+  #goal_coordinates: matrix of goal coordinates (lat, long) for final raster cells. Cells over island ommited
+  #reference_grid: raster of shape and resolution for final raster
+  #FUN: string giving function to aggregate observations by. Choice of "count", "sum", "mean"
+  #dat: if FUN is "sum" or "mean", vector of observation values
+  
   int_raster <- reference_grid
   int_raster <- setValues(int_raster, rep(NA, nrow(coordinates(int_raster))))
   
@@ -947,7 +956,7 @@ interpolateWithBarriers <- function(dist_mat, goal_coordinates, reference_grid, 
     
     w <- which(x == goal_coordinates[cell, 1] & y == goal_coordinates[cell, 2])
     
-    include <- which(na.omit(dist_mat[cell, ] <= 7))
+    include <- which(na.omit(dist_mat[cell, ] <= 3))
     
     if (FUN == "count") {
       interp[w] <- length(include)
@@ -971,7 +980,7 @@ interpolateWithBarriers <- function(dist_mat, goal_coordinates, reference_grid, 
 
 #interpolate for whales
 
-dist_mat <- distToCell(goal_coords, true_lat_long, tr)
+dist_mat  <- distToCell(goal_coords, true_lat_long, tr)
 whale_int <- interpolateWithBarriers(dist_mat, goal_coords, island, FUN = "count")
 
 par(mfrow = c(1, 2))
@@ -993,15 +1002,17 @@ plot(balleny_poly, col = "grey", add = TRUE)
 
 #interpolate for environmental conditions
 
-sea_state_int <- interpolateWithBarriers(dist_mat, goal_coords, island, FUN = "mean", dat = krill_env$SeaState)
+sea_state_int    <- interpolateWithBarriers(dist_mat, goal_coords, island, FUN = "mean", dat = krill_env$SeaState)
 sightability_int <- interpolateWithBarriers(dist_mat, goal_coords, island, FUN = "mean", dat = krill_env$Sightability)
-cloud_int <- interpolateWithBarriers(dist_mat, goal_coords, island, FUN = "mean", dat = krill_env$CloudCover)
+cloud_int        <- interpolateWithBarriers(dist_mat, goal_coords, island, FUN = "mean", dat = krill_env$CloudCover)
 
 #interpolate for effort
 
-dist_mat <- distToCell(goal_coords, data.frame(cbind(gps$Latitude, gps$Longitude)), tr)
+dist_mat   <- distToCell(goal_coords, data.frame(cbind(gps$Latitude, gps$Longitude)), tr)
 effort_int <- interpolateWithBarriers(dist_mat, goal_coords, island, FUN = "sum", dat = gps$bin_time)
 
+
+#set up data frame
 
 predictors <- stack(krill_int, sea_state_int, sightability_int, cloud_int)
 names(predictors) <- c('krill', 'sea_state', 'sightability', 'cloud') 
@@ -1014,6 +1025,8 @@ d <- na.omit(d)
 whale_pa <- rep(0, nrow(d))
 whale_pa[d$whales > 0] <- 1
 
+
+#glm
 
 raster.glm <- glm(whales ~ krill + sea_state + effort - 1, family = "poisson", data = d)
 summary(raster.glm)
