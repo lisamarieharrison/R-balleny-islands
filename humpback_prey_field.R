@@ -1031,7 +1031,7 @@ whale_pa[d$whales > 0] <- 1
 
 #glm
 
-raster.glm <- glm(whales ~ krill + cloud + sightability, family = "poisson", data = d)
+raster.glm <- glm(whales ~ krill + cloud, family = "poisson", data = d)
 summary(raster.glm)
 
 
@@ -1045,7 +1045,7 @@ sp.data <- SpatialPointsDataFrame(coords <- cbind(d$long, d$lat), data = d, proj
 
 
 #best model selected using AIC
-gwr.formula <- formula(whales ~ krill + sea_state + cloud)
+gwr.formula <- formula(whales ~ krill + cloud)
 
 #choose bandwidth
 raster.gwr.bw <- bw.ggwr(gwr.formula, data = sp.data, adaptive = FALSE, family = "poisson",
@@ -1077,7 +1077,7 @@ par(mfrow = c(1, length(raster.gwr$glm.res$coefficients)))
 
 for (i in names(raster.gwr$glm.res$coefficients)) {
   
-  plot(rasterize(cbind(results$coords.x1, results$coords.x2), island, results[, names(results) == i], fun = sum), main = i)
+  plot(rasterize(cbind(results$coords.x1, results$coords.x2), island, exp(results[, names(results) == i]), fun = sum), main = i)
   
 }
 
