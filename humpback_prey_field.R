@@ -898,55 +898,112 @@ goal_coords <- coordinates(island)[getValues(island == 10000), ]
 
 true_lat_long <- na.omit(true_lat_long)
 
-dist_mat <- matrix(NA, nrow = nrow(goal_coords), ncol = nrow(true_lat_long))
-for (cell in 1:nrow(goal_coords)) {
+distToCell <- function(goal_coordinates, observation_coordinates, transition_layer) {
   
-  dist_guess <- gcdHF(deg2rad(goal_coords[cell, 2]), deg2rad(goal_coords[cell, 1]), deg2rad(true_lat_long[, 1]), deg2rad(true_lat_long[, 2]))
   
-  #only check observations where guess distance is close
-  if (any(dist_guess < 10)) {
+  dist_mat <- matrix(NA, nrow = nrow(goal_coordinates), ncol = nrow(observation_coordinates))
+  
+  
+  for (cell in 1:nrow(goal_coordinates)) {
     
-    for (i in which(dist_guess < 10)) {
+    dist_guess <- gcdHF(deg2rad(goal_coordinates[cell, 2]), deg2rad(goal_coordinates[cell, 1]), deg2rad(observation_coordinates[, 1]), deg2rad(observation_coordinates[, 2]))
+    
+    #only check observations where guess distance is close
+    if (any(dist_guess < 8)) {
       
-      tryCatch({
-      shortest_path <- shortestPath(tr, cbind(goal_coords[cell, 1], goal_coords[cell, 2]), 
-                                    as.matrix(rev(true_lat_long[i, ]), ncol = 2), "SpatialLines")
-      dist_mat[cell, i] <- SpatialLinesLengths(shortest_path)
-      }, error = function(e) {
-        print("ERROR: Looks like we got an error, skipping point")
-        shortest_path <- NA
-      })
-      
+      for (i in which(dist_guess < 8)) {
+        
+        tryCatch({
+          shortest_path <- shortestPath(transition_layer, cbind(goal_coordinates[cell, 1], goal_coordinates[cell, 2]), 
+                                        as.matrix(rev(observation_coordinates[i, ]), ncol = 2), "SpatialLines")
+          dist_mat[cell, i] <- SpatialLinesLengths(shortest_path)
+        }, error = function(e) {
+          print("ERROR: Looks like we got an error, skipping point")
+          shortest_path <- NA
+        })
+        
+      }
     }
   }
+  
+  return (dist_mat)
+  
 }
+
+
+interpolateWithBarriers <- function(dist_mat, goal_coordinates, reference_grid, FUN, dat = NULL) {
+  
+  int_raster <- reference_grid
+  int_raster <- setValues(int_raster, rep(NA, nrow(coordinates(int_raster))))
+  
+  interp <- NULL
+  for (cell in 1:nrow(goal_coordinates)) {
+    
+    w <- which(x == goal_coordinates[cell, 1] & y == goal_coordinates[cell, 2])
+    
+    include <- which(na.omit(dist_mat[cell, ] <= 5))
+    
+    if (FUN == "count") {
+      interp[w] <- length(include)
+    }
+    
+    if (FUN == "mean") {
+      interp[w] <- mean(dat[include])
+    }
+    
+    if (FUN == "sum") {
+      interp[w] <- sum(dat[include])
+    }
+    
+  }
+  
+  int_raster <- setValues(int_raster, interp)
+
+}
+
 
 
 #interpolate for whales
-whale_int <- island
-whale_int <- setValues(whale_int, rep(NA, nrow(coordinates(whale_int))))
 
-interp <- NULL
-for (cell in 1:nrow(goal_coords)) {
-  
-  w <- which(x == goal_coords[cell, 1] & y == goal_coords[cell, 2])
-  
-  include <- na.omit(dist_mat[cell, ][dist_mat[cell, ] <= 5])
-  
-  interp[w] <- length(include)
-  
-}
-
-interp[is.na(getValues(effort))] <- NA
-
-whale_int <- setValues(whale_int, interp)
-
+dist_mat <- distToCell(goal_coords, true_lat_long, tr)
+whale_int <- interpolateWithBarriers(dist_mat, goal_coords, island, FUN = "count")
 
 par(mfrow = c(1, 2))
 plot(whale_raster)
-plot(balleny_poly, add = TRUE)
+plot(balleny_poly, col = "grey", add = TRUE)
 plot(whale_int)
-plot(balleny_poly, add = TRUE)
+plot(balleny_poly, col = "grey", add = TRUE)
+
+#interpolate for krill
+
+dist_mat <- distToCell(goal_coords, data.frame(cbind(krill$Latitude, krill$Longitude)), tr)
+krill_int <- interpolateWithBarriers(dist_mat, goal_coords, island, FUN = "mean", dat = log(krill$arealDen))
+
+par(mfrow = c(1, 2))
+plot(krill_raster)
+plot(balleny_poly, col = "grey", add = TRUE)
+plot(krill_int)
+plot(balleny_poly, col = "grey", add = TRUE)
+
+#interpolate for environmental conditions
+
+sea_state_int <- interpolateWithBarriers(dist_mat, goal_coords, island, FUN = "mean", dat = krill_env$SeaState)
+sightability_int <- interpolateWithBarriers(dist_mat, goal_coords, island, FUN = "mean", dat = krill_env$Sightability)
+cloud_int <- interpolateWithBarriers(dist_mat, goal_coords, island, FUN = "mean", dat = krill_env$CloudCover)
+
+#interpolate for effort
+
+dist_mat <- distToCell(goal_coords, data.frame(cbind(gps$Latitude, gps$Longitude)), tr)
+effort_int <- interpolateWithBarriers(dist_mat, goal_coords, island, FUN = "sum", dat = gps$bin_time)
+
+
+par(mfrow = c(1, 2))
+plot(effort)
+plot(balleny_poly, col = "grey", add = TRUE)
+plot(effort_int)
+plot(balleny_poly, col = "grey", add = TRUE)
+
+
 
 #need to remove cells that are >50% on the island
 
