@@ -791,7 +791,7 @@ d <- na.omit(d)
 whale_pa <- rep(0, nrow(d))
 whale_pa[d$whales > 0] <- 1
 
-raster.glm <- glm(whales ~ krill + sea_state + cloud + sea_state, family = "poisson", data = d)
+raster.glm <- glm(whales ~ krill + sea_state + cloud, family = "poisson", data = d)
 summary(raster.glm)
 
 
@@ -915,9 +915,9 @@ distToCell <- function(goal_coordinates, observation_coordinates, transition_lay
     dist_guess <- gcdHF(deg2rad(x[2]), deg2rad(x[1]), deg2rad(observation_coordinates[, 1]), deg2rad(observation_coordinates[, 2]))
     
     #only check observations where guess distance is close
-    if (any(dist_guess < 8)) {
+    if (any(dist_guess < 6)) {
       
-      for (i in which(dist_guess < 8)) {
+      for (i in which(dist_guess < 6)) {
         
         tryCatch({
           shortest_path <- shortestPath(transition_layer, cbind(x[1], x[2]), 
@@ -956,7 +956,7 @@ interpolateWithBarriers <- function(dist_mat, goal_coordinates, reference_grid, 
     
     w <- which(x == goal_coordinates[cell, 1] & y == goal_coordinates[cell, 2])
     
-    include <- which(na.omit(dist_mat[cell, ] <= 7))
+    include <- which(na.omit(dist_mat[cell, ] <= 5))
     
     if (FUN == "count") {
       interp[w] <- length(include)
@@ -1017,6 +1017,9 @@ effort_int <- interpolateWithBarriers(dist_mat, goal_coords, island, FUN = "sum"
 predictors <- stack(krill_int, sea_state_int, sightability_int, cloud_int)
 names(predictors) <- c('krill', 'sea_state', 'sightability', 'cloud') 
 
+x <- coordinates(island)[, 1]
+y <- coordinates(island)[, 2]
+
 d <- data.frame(cbind(getValues(whale_int), getValues(effort_int), getValues(predictors), x, y))
 d <- data.frame(cbind(d[, c(1, 7, 8)], apply(d[, c(2:6)], 2, FUN = scale, scale = FALSE)))
 names(d) <- c("whales", "long", "lat", "effort", "krill", "sea_state", "sightability", "cloud")
@@ -1028,10 +1031,11 @@ whale_pa[d$whales > 0] <- 1
 
 #glm
 
-raster.glm <- glm(whales ~ krill + sea_state + sightability + cloud, family = "poisson", data = d)
+raster.glm <- glm(whales ~ krill + cloud + sightability, family = "poisson", data = d)
 summary(raster.glm)
 
 
+glm.ss <- calcPA(raster.glm, whale_pa, d)
 
 
 
@@ -1041,7 +1045,7 @@ sp.data <- SpatialPointsDataFrame(coords <- cbind(d$long, d$lat), data = d, proj
 
 
 #best model selected using AIC
-gwr.formula <- formula(whales ~ krill + sea_state + sightability + cloud)
+gwr.formula <- formula(whales ~ krill + sea_state + cloud)
 
 #choose bandwidth
 raster.gwr.bw <- bw.ggwr(gwr.formula, data = sp.data, adaptive = FALSE, family = "poisson",
@@ -1049,7 +1053,7 @@ raster.gwr.bw <- bw.ggwr(gwr.formula, data = sp.data, adaptive = FALSE, family =
 
 #poisson gwr
 #using fixed bandwidth of 20km to avoid crossing islands
-raster.gwr <- gwr.generalised(gwr.formula, data = sp.data, bw = 20, adaptive = FALSE, family = "poisson",
+raster.gwr <- gwr.generalised(gwr.formula, data = sp.data, bw = raster.gwr.bw, adaptive = FALSE, family = "poisson",
                               longlat = TRUE, kernel = "gaussian")
 raster.gwr
 
@@ -1080,6 +1084,64 @@ for (i in names(raster.gwr$glm.res$coefficients)) {
 
 
 
+#----------------------------- REMOVING CELLS OVERLAPPING ISLANDS ----------------------------#
+
+
+#find box size distance (km)
+km <- 10
+box_x <- round(gcdHF(deg2rad(-67.7), deg2rad(162), deg2rad(-67.7), deg2rad(165.2))/km)
+box_y <- round(gcdHF(deg2rad(-67.7), deg2rad(162), deg2rad(-66), deg2rad(162))/km)
+
+location_grid <- raster(ncol = box_x, nrow = box_y, xmn = 162, xmx = 165.2, ymn = -67.7, ymx = -66)
+
+krill$arealDen[krill$arealDen == 0] <- NA
+krill_raster <- rasterize(cbind(krill$Longitude, krill$Latitude), location_grid, log(krill$arealDen), fun = mean)
+whale_raster <- rasterize(rev(true_lat_long), location_grid, rep(1, nrow(true_lat_long)), fun = sum)
+effort       <- rasterize(cbind(gps$Longitude, gps$Latitude), location_grid, gps$bin_time, fun = sum)
+sea_state    <- rasterize(cbind(krill$Longitude, krill$Latitude), location_grid, krill_env$SeaState, fun = mean)
+sightability <- rasterize(cbind(krill$Longitude, krill$Latitude), location_grid, krill_env$Sightability, fun = mean)
+cloud        <- rasterize(cbind(krill$Longitude, krill$Latitude), location_grid, krill_env$CloudCover, fun = mean)
+
+
+   
+removeOverlap <- function(rast, poly) {
+  poly_overlap <- getValues(rasterize(poly, rast, getCover=TRUE))
+  remove_overlap <- getValues(rast)
+  remove_overlap[poly_overlap >= 40] <- NA
+  rast <- setValues(rast, remove_overlap)
+  return (rast)
+}
+
+krill_raster <- removeOverlap(krill_raster, balleny_poly)
+whale_raster <- removeOverlap(whale_raster, balleny_poly)
+effort <- removeOverlap(effort, balleny_poly)
+sea_state <- removeOverlap(sea_state, balleny_poly)
+sightability <- removeOverlap(sightability, balleny_poly)
+cloud <- removeOverlap(cloud, balleny_poly)
+
+
+
+#create raster stack of predictors
+predictors <- stack(krill_raster, sea_state, sightability, cloud)
+names(predictors) <- c('krill', 'sea_state', 'sightability', 'cloud') 
+plot(predictors)
+
+whale_zeros <- getValues(whale_raster)
+whale_zeros[!is.na(getValues(krill_raster)) & is.na(getValues(whale_raster))] <- 0
+whale_raster <- setValues(whale_raster, whale_zeros)
+
+
+#dist from top in km
+x <- coordinates(krill_raster)[, 1]
+y <- coordinates(krill_raster)[, 2]
+
+d <- data.frame(cbind(getValues(whale_raster), getValues(effort), getValues(predictors), x, y))
+d <- data.frame(cbind(d[, c(1, 7, 8)], apply(d[, c(2:6)], 2, FUN = scale, scale = FALSE)))
+names(d) <- c("whales", "long", "lat", "effort", "krill", "sea_state", "sightability", "cloud")
+d <- na.omit(d)
+
+whale_pa <- rep(0, nrow(d))
+whale_pa[d$whales > 0] <- 1
 
 
 
