@@ -875,7 +875,7 @@ balleny_map <- map("world2Hires", regions=c("Antarctica:Young Island", "Antarcti
 balleny_poly <- map2SpatialPolygons(balleny_map, IDs = balleny_map$names, proj4string=CRS("+proj=longlat +datum=WGS84"))
 
 #set up goal resolution
-km <- 5
+km <- 10
 box_x <- round(gcdHF(deg2rad(-67.7), deg2rad(162), deg2rad(-67.7), deg2rad(165.2))/km)
 box_y <- round(gcdHF(deg2rad(-67.7), deg2rad(162), deg2rad(-66), deg2rad(162))/km)
 location_grid <- raster(ncol = box_x, nrow = box_y, xmn = 162, xmx = 165.2, ymn = -67.7, ymx = -66)
@@ -888,14 +888,15 @@ box_y <- round(gcdHF(deg2rad(-67.7), deg2rad(162), deg2rad(-66), deg2rad(162))/k
 
 location_grid <- raster(ncol = box_x, nrow = box_y, xmn = 162, xmx = 165.2, ymn = -67.7, ymx = -66)
 
+#create cost raster
+#islands and barriers given 1 and sea 10000
 costras <- rasterize(balleny_poly, location_grid, field = 1, background = 10000)
 tr <- transition(costras, transitionFunction = mean, 8)
 tr <- geoCorrection(tr, type="c")
 
-#interpolation around islands
 
-#10km grid centered at goal_coords
-goal_coords <- coordinates(island)[getValues(island == 10000), ]
+#grid centered at goal_coords omitting cells over islands
+goal_coords <- coordinates(island)[getValues(island) == 10000, ]
 
 #dist from goal coords to each data point
 
@@ -907,35 +908,34 @@ distToCell <- function(goal_coordinates, observation_coordinates, transition_lay
   #observation coordinates: matrix of all observation coordinates (lat, long)
   #transition_layer: Transition layer object for cost of transition between cells
   
-  dist_mat <- matrix(NA, nrow = nrow(goal_coordinates), ncol = nrow(observation_coordinates))
-  
-  
-  for (cell in 1:nrow(goal_coordinates)) {
+  calcDist <- function(x) {
     
-    dist_guess <- gcdHF(deg2rad(goal_coordinates[cell, 2]), deg2rad(goal_coordinates[cell, 1]), deg2rad(observation_coordinates[, 1]), deg2rad(observation_coordinates[, 2]))
+    dist_mat <- rep(NA, nrow(observation_coordinates))
+    
+    dist_guess <- gcdHF(deg2rad(x[2]), deg2rad(x[1]), deg2rad(observation_coordinates[, 1]), deg2rad(observation_coordinates[, 2]))
     
     #only check observations where guess distance is close
-    if (any(dist_guess < 4)) {
+    if (any(dist_guess < 8)) {
       
-      for (i in which(dist_guess < 4)) {
+      for (i in which(dist_guess < 8)) {
         
         tryCatch({
-          shortest_path <- shortestPath(transition_layer, cbind(goal_coordinates[cell, 1], goal_coordinates[cell, 2]), 
+          shortest_path <- shortestPath(transition_layer, cbind(x[1], x[2]), 
                                         as.matrix(rev(observation_coordinates[i, ]), ncol = 2), "SpatialLines")
-          dist_mat[cell, i] <- SpatialLinesLengths(shortest_path)
+          dist_mat[i] <- SpatialLinesLengths(shortest_path)
         }, error = function(e) {
           print("ERROR: Looks like we got an error, skipping point")
-          shortest_path <- NA
         })
         
       }
-    }
+    } 
+    return (dist_mat)
   }
   
-  return (dist_mat)
+  dist_mat <- t(apply(goal_coordinates, 1, calcDist))
   
+  return (dist_mat)
 }
-
 
 interpolateWithBarriers <- function(dist_mat, goal_coordinates, reference_grid, FUN, dat = NULL) {
   
@@ -956,7 +956,7 @@ interpolateWithBarriers <- function(dist_mat, goal_coordinates, reference_grid, 
     
     w <- which(x == goal_coordinates[cell, 1] & y == goal_coordinates[cell, 2])
     
-    include <- which(na.omit(dist_mat[cell, ] <= 3))
+    include <- which(na.omit(dist_mat[cell, ] <= 7))
     
     if (FUN == "count") {
       interp[w] <- length(include)
@@ -1028,7 +1028,7 @@ whale_pa[d$whales > 0] <- 1
 
 #glm
 
-raster.glm <- glm(whales ~ krill + sea_state + effort - 1, family = "poisson", data = d)
+raster.glm <- glm(whales ~ krill + sea_state + sightability + cloud, family = "poisson", data = d)
 summary(raster.glm)
 
 
@@ -1041,7 +1041,7 @@ sp.data <- SpatialPointsDataFrame(coords <- cbind(d$long, d$lat), data = d, proj
 
 
 #best model selected using AIC
-gwr.formula <- formula(whales ~ krill + sea_state + effort - 1)
+gwr.formula <- formula(whales ~ krill + sea_state + sightability + cloud)
 
 #choose bandwidth
 raster.gwr.bw <- bw.ggwr(gwr.formula, data = sp.data, adaptive = FALSE, family = "poisson",
