@@ -1044,7 +1044,7 @@ par(mfrow = c(1, length(raster.gwr$glm.res$coefficients)))
 
 for (i in names(raster.gwr$glm.res$coefficients)) {
   
-  plot(rasterize(cbind(results$coords.x1, results$coords.x2), location_grid, exp(results[, names(results) == i]), fun = sum), main = i)
+  plot(rasterize(cbind(results$coords.x1, results$coords.x2), location_grid, results[, names(results) == i], fun = sum), main = i)
   
 }
 
