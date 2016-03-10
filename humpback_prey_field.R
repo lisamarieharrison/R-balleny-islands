@@ -860,7 +860,10 @@ for (i in names(raster.gwr$glm.res$coefficients)) {
   
 }
 
-loc.sp <- SpatialPointsDataFrame(coords <- cbind(x, y), data = data.frame(rep(1, length(x))))
+
+
+#----------------------------------- INTERPOLATION WITH BARRIERS -----------------------------------------#
+
 
 #plot of Balleny Islands
 
@@ -872,7 +875,7 @@ balleny_map <- map("world2Hires", regions=c("Antarctica:Young Island", "Antarcti
 balleny_poly <- map2SpatialPolygons(balleny_map, IDs = balleny_map$names, proj4string=CRS("+proj=longlat +datum=WGS84"))
 
 #set up goal resolution
-km <- 10
+km <- 5
 box_x <- round(gcdHF(deg2rad(-67.7), deg2rad(162), deg2rad(-67.7), deg2rad(165.2))/km)
 box_y <- round(gcdHF(deg2rad(-67.7), deg2rad(162), deg2rad(-66), deg2rad(162))/km)
 location_grid <- raster(ncol = box_x, nrow = box_y, xmn = 162, xmx = 165.2, ymn = -67.7, ymx = -66)
@@ -936,12 +939,15 @@ interpolateWithBarriers <- function(dist_mat, goal_coordinates, reference_grid, 
   int_raster <- reference_grid
   int_raster <- setValues(int_raster, rep(NA, nrow(coordinates(int_raster))))
   
+  x <- coordinates(reference_grid)[, 1]
+  y <- coordinates(reference_grid)[, 2]
+  
   interp <- NULL
   for (cell in 1:nrow(goal_coordinates)) {
     
     w <- which(x == goal_coordinates[cell, 1] & y == goal_coordinates[cell, 2])
     
-    include <- which(na.omit(dist_mat[cell, ] <= 5))
+    include <- which(na.omit(dist_mat[cell, ] <= 7))
     
     if (FUN == "count") {
       interp[w] <- length(include)
@@ -976,7 +982,7 @@ plot(balleny_poly, col = "grey", add = TRUE)
 
 #interpolate for krill
 
-dist_mat <- distToCell(goal_coords, data.frame(cbind(krill$Latitude, krill$Longitude)), tr)
+dist_mat  <- distToCell(goal_coords, data.frame(cbind(krill$Latitude, krill$Longitude)), tr)
 krill_int <- interpolateWithBarriers(dist_mat, goal_coords, island, FUN = "mean", dat = log(krill$arealDen))
 
 par(mfrow = c(1, 2))
@@ -997,15 +1003,69 @@ dist_mat <- distToCell(goal_coords, data.frame(cbind(gps$Latitude, gps$Longitude
 effort_int <- interpolateWithBarriers(dist_mat, goal_coords, island, FUN = "sum", dat = gps$bin_time)
 
 
+predictors <- stack(krill_int, sea_state_int, sightability_int, cloud_int)
+names(predictors) <- c('krill', 'sea_state', 'sightability', 'cloud') 
+
+d <- data.frame(cbind(getValues(whale_int), getValues(effort_int), getValues(predictors), x, y))
+d <- data.frame(cbind(d[, c(1, 7, 8)], apply(d[, c(2:6)], 2, FUN = scale, scale = FALSE)))
+names(d) <- c("whales", "long", "lat", "effort", "krill", "sea_state", "sightability", "cloud")
+d <- na.omit(d)
+
+whale_pa <- rep(0, nrow(d))
+whale_pa[d$whales > 0] <- 1
+
+
+raster.glm <- glm(whales ~ krill + sea_state + effort - 1, family = "poisson", data = d)
+summary(raster.glm)
+
+
+
+
+
+dists <- gw.dist(cbind(d$long, d$lat), longlat = TRUE)
+
+sp.data <- SpatialPointsDataFrame(coords <- cbind(d$long, d$lat), data = d, proj4string=CRS("+proj=longlat +datum=WGS84"))
+
+
+#best model selected using AIC
+gwr.formula <- formula(whales ~ krill + sea_state + effort - 1)
+
+#choose bandwidth
+raster.gwr.bw <- bw.ggwr(gwr.formula, data = sp.data, adaptive = FALSE, family = "poisson",
+                         longlat = TRUE, dMat = dists, approach = "AIC", kernel = "gaussian")
+
+#poisson gwr
+#using fixed bandwidth of 20km to avoid crossing islands
+raster.gwr <- gwr.generalised(gwr.formula, data = sp.data, bw = 20, adaptive = FALSE, family = "poisson",
+                              longlat = TRUE, kernel = "gaussian")
+raster.gwr
+
+#calculate gwr fitted values
+gwr.model.fitted <- getFittedGWR(raster.gwr, d)
+
+
 par(mfrow = c(1, 2))
-plot(effort)
-plot(balleny_poly, col = "grey", add = TRUE)
-plot(effort_int)
-plot(balleny_poly, col = "grey", add = TRUE)
+
+plot(d$whales, raster.gwr$glm.res$fitted.values, pch = 19, main = "GLM", ylim = c(0, max(d$whales)))
+points(c(0, 100), c(0, 100), col = "red", type = "l")
+
+plot(d$whales, gwr.model.fitted, pch = 19, main = "GWR GLM", ylim = c(0, max(d$whales)))
+points(c(0, 100), c(0, 100), col = "red", type = "l")
+
+
+#plot explanatory variable coefficients geographically
+results <- as.data.frame(raster.gwr$SDF)
+
+par(mfrow = c(1, length(raster.gwr$glm.res$coefficients)))
+
+for (i in names(raster.gwr$glm.res$coefficients)) {
+  
+  plot(rasterize(cbind(results$coords.x1, results$coords.x2), island, results[, names(results) == i], fun = sum), main = i)
+  
+}
 
 
 
-#need to remove cells that are >50% on the island
 
 
 
