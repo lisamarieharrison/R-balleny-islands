@@ -42,7 +42,7 @@ function_list <- c("gcdHF.R",
                    "distFromKrill.R",
                    "krillBinTimeDiff.R",
                    "krillWeightedAverage.R",
-                   "countIndividualsAroundKrill.R",
+                   "countIndividalsAroundKrill.R",
                    "removeRasterOverlap.R"
 )
 
@@ -752,16 +752,16 @@ sea_state    <- rasterize(cbind(krill$Longitude, krill$Latitude), location_grid,
 sightability <- rasterize(cbind(krill$Longitude, krill$Latitude), location_grid, krill_env$Sightability, fun = mean)
 cloud        <- rasterize(cbind(krill$Longitude, krill$Latitude), location_grid, krill_env$CloudCover, fun = mean)
 
-allowance <- 20
 
-krill_raster <- removeRasterOverlap(krill_raster, balleny_poly, allowance)
-whale_raster <- removeRasterOverlap(whale_raster, balleny_poly, allowance)
-effort <- removeRasterOverlap(effort, balleny_poly, allowance)
-sea_state <- removeRasterOverlap(sea_state, balleny_poly, allowance)
-sightability <- removeRasterOverlap(sightability, balleny_poly, allowance)
-cloud <- removeRasterOverlap(cloud, balleny_poly, allowance)
+rasterList <- list("krill_raster" = krill_raster, "whale_raster" = whale_raster, "effort" = effort, 
+                   "sea_state" = sea_state, "sightability" = sightability, "cloud" = cloud)
 
-
+for (item in 1:length(rasterList)) {
+  
+  removed <- removeRasterOverlap(rasterList[[item]], balleny_poly, 20)
+  assign(names(rasterList)[item], removed)
+  
+}
 
 #create raster stack of predictors
 predictors <- stack(krill_raster, sea_state, sightability, cloud)
@@ -811,6 +811,8 @@ raster.gwr
 
 #calculate gwr fitted values
 gwr.model.fitted <- getFittedGWR(raster.gwr, d)
+
+gwr_ss <- calcPA(raster.gwr, whale_pa, d)
 
 
 par(mfrow = c(1, 2))
