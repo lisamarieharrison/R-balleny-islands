@@ -769,6 +769,16 @@ whale_raster <- setValues(whale_raster, whale_zeros)
 variables <- stack(whale_raster, effort, krill_raster, sea_state, sightability, cloud)
 names(variables) <- c('whales', 'effort', 'krill', 'sea_state', 'sightability', 'cloud') 
 
+par(mfrow = c(2, 3))
+for (item in 1:length(variables)) {
+  
+  plot(variables[[item]], main = names(variables)[item])
+  plot(balleny_poly, col = "grey", add = T) 
+  
+}
+
+
+
 #create data frame of all variables
 d <- dfFromRaster(variable_stack = variables, centre_vars = 2:6)
 
@@ -826,7 +836,7 @@ sqrt(sum((round(gwr.model.fitted) - d$whales)^2)/nrow(d)) #gwr
 #plot explanatory variable coefficients geographically
 results <- as.data.frame(raster.gwr$SDF)
 
-par(mfrow = c(1, length(raster.gwr$glm.res$coefficients)))
+par(mfrow = c(1, length(raster.gwr$glm.res$coefficients)), oma = c(1, 1, 1, 3))
 
 for (i in names(raster.gwr$glm.res$coefficients)) {
   
