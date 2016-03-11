@@ -756,7 +756,7 @@ rasterList <- list("krill_raster" = krill_raster, "whale_raster" = whale_raster,
 
 for (item in 1:length(rasterList)) {
   
-  removed <- removeRasterOverlap(rasterList[[item]], balleny_poly, allowance = 40)
+  removed <- removeRasterOverlap(rasterList[[item]], balleny_poly, allowance = 50)
   assign(names(rasterList)[item], removed)
   
 }
@@ -811,11 +811,16 @@ gwr_ss <- calcPA(raster.gwr, whale_pa, d)
 
 par(mfrow = c(1, 2))
 
-plot(d$whales, raster.gwr$glm.res$fitted.values, pch = 19, main = "GLM", ylim = c(0, max(d$whales)))
+plot(d$whales, fitted(raster.glm), pch = 19, main = "GLM", ylim = c(0, max(d$whales)))
 points(c(0, 100), c(0, 100), col = "red", type = "l")
 
 plot(d$whales, gwr.model.fitted, pch = 19, main = "GWR GLM", ylim = c(0, max(d$whales)))
 points(c(0, 100), c(0, 100), col = "red", type = "l")
+
+
+#calculate RMSE
+sqrt(sum((round(fitted(raster.glm)) - d$whales)^2)/nrow(d)) #glm
+sqrt(sum((round(gwr.model.fitted) - d$whales)^2)/nrow(d)) #gwr
 
 
 #plot explanatory variable coefficients geographically
@@ -829,6 +834,9 @@ for (i in names(raster.gwr$glm.res$coefficients)) {
   plot(balleny_poly, col = "grey", add = TRUE)
   
 }
+
+
+
 
 
 
