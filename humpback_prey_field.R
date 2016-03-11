@@ -43,7 +43,8 @@ function_list <- c("gcdHF.R",
                    "krillBinTimeDiff.R",
                    "krillWeightedAverage.R",
                    "countIndividalsAroundKrill.R",
-                   "removeRasterOverlap.R"
+                   "removeRasterOverlap.R",
+                   "dfFromRaster.R"
 )
 
 for (f in function_list) {
@@ -715,19 +716,16 @@ cloud_int        <- interpolateWithBarriers(dist_mat, goal_coords, island, FUN =
 dist_mat   <- distToCell(goal_coords, data.frame(cbind(gps$Latitude, gps$Longitude)), tr)
 effort_int <- interpolateWithBarriers(dist_mat, goal_coords, island, FUN = "sum", dat = gps$bin_time)
 
+#create raster stack of all variables
+whale_zeros <- getValues(whale_raster)
+whale_zeros[!is.na(getValues(effort)) & is.na(getValues(whale_raster))] <- 0
+whale_raster <- setValues(whale_raster, whale_zeros)
 
-#set up data frame
+variables <- stack(whale_raster, effort, krill_raster, sea_state, sightability, cloud)
+names(variables) <- c('whales', 'effort', 'krill', 'sea_state', 'sightability', 'cloud') 
 
-predictors <- stack(krill_int, sea_state_int, sightability_int, cloud_int)
-names(predictors) <- c('krill', 'sea_state', 'sightability', 'cloud') 
-
-x <- coordinates(island)[, 1]
-y <- coordinates(island)[, 2]
-
-d <- data.frame(cbind(getValues(whale_int), getValues(effort_int), getValues(predictors), x, y))
-d <- data.frame(cbind(d[, c(1, 7, 8)], apply(d[, c(2:6)], 2, FUN = scale, scale = FALSE)))
-names(d) <- c("whales", "long", "lat", "effort", "krill", "sea_state", "sightability", "cloud")
-d <- na.omit(d)
+#create data frame of all variables
+d <- dfFromRaster(variable_stack = variables, centre_vars = 2:6)
 
 whale_pa <- rep(0, nrow(d))
 whale_pa[d$whales > 0] <- 1
@@ -737,14 +735,14 @@ whale_pa[d$whales > 0] <- 1
 #----------------------------- REMOVING CELLS OVERLAPPING ISLANDS ----------------------------#
 
 
-#find box size distance (km)
+#find box size distance (km) and set up raster template
 km <- 10
 box_x <- round(gcdHF(deg2rad(-67.7), deg2rad(162), deg2rad(-67.7), deg2rad(165.2))/km)
 box_y <- round(gcdHF(deg2rad(-67.7), deg2rad(162), deg2rad(-66), deg2rad(162))/km)
 
 location_grid <- raster(ncol = box_x, nrow = box_y, xmn = 162, xmx = 165.2, ymn = -67.7, ymx = -66)
 
-krill$arealDen[krill$arealDen == 0] <- NA
+#create rasters
 krill_raster <- rasterize(cbind(krill$Longitude, krill$Latitude), location_grid, log(krill$arealDen), fun = mean)
 whale_raster <- rasterize(rev(true_lat_long), location_grid, rep(1, nrow(true_lat_long)), fun = sum)
 effort       <- rasterize(cbind(gps$Longitude, gps$Latitude), location_grid, gps$bin_time, fun = sum)
@@ -758,31 +756,27 @@ rasterList <- list("krill_raster" = krill_raster, "whale_raster" = whale_raster,
 
 for (item in 1:length(rasterList)) {
   
-  removed <- removeRasterOverlap(rasterList[[item]], balleny_poly, 20)
+  removed <- removeRasterOverlap(rasterList[[item]], balleny_poly, allowance = 40)
   assign(names(rasterList)[item], removed)
   
 }
 
-#create raster stack of predictors
-predictors <- stack(krill_raster, sea_state, sightability, cloud)
-names(predictors) <- c('krill', 'sea_state', 'sightability', 'cloud') 
-
+#create raster stack of all variables
 whale_zeros <- getValues(whale_raster)
 whale_zeros[!is.na(getValues(effort)) & is.na(getValues(whale_raster))] <- 0
 whale_raster <- setValues(whale_raster, whale_zeros)
 
+variables <- stack(whale_raster, effort, krill_raster, sea_state, sightability, cloud)
+names(variables) <- c('whales', 'effort', 'krill', 'sea_state', 'sightability', 'cloud') 
 
-#dist from top in km
-x <- coordinates(krill_raster)[, 1]
-y <- coordinates(krill_raster)[, 2]
-
-d <- data.frame(cbind(getValues(whale_raster), getValues(effort), getValues(predictors), x, y))
-d <- data.frame(cbind(d[, c(1, 7, 8)], apply(d[, c(2:6)], 2, FUN = scale, scale = FALSE)))
-names(d) <- c("whales", "long", "lat", "effort", "krill", "sea_state", "sightability", "cloud")
-d <- na.omit(d)
+#create data frame of all variables
+d <- dfFromRaster(variable_stack = variables, centre_vars = 2:6)
 
 whale_pa <- rep(0, nrow(d))
 whale_pa[d$whales > 0] <- 1
+
+
+
 
 #glm
 
@@ -832,6 +826,7 @@ par(mfrow = c(1, length(raster.gwr$glm.res$coefficients)))
 for (i in names(raster.gwr$glm.res$coefficients)) {
   
   plot(rasterize(cbind(results$coords.x1, results$coords.x2), location_grid, results[, names(results) == i], fun = sum), main = i)
+  plot(balleny_poly, col = "grey", add = TRUE)
   
 }
 
