@@ -9,7 +9,7 @@ if (Sys.info()[4] == "SCI-6246") {
 } else {
   setwd(dir = "C:/Users/Lisa/Documents/phd/southern ocean/Balleny Islands/csv")
   source_location <- "C:/Users/Lisa/Documents/phd/southern ocean/Mixed models/R code/R-functions-southern-ocean/"
-}
+} 
 
 gps      <- read.csv("GpsData.csv", header = T)
 sighting <- read.csv("Sighting.csv", header = T)
