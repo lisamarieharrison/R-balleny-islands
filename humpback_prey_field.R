@@ -23,15 +23,35 @@ library(Matching) #ks.boot
 library(plotrix) #vectorField
 library(geosphere) #destPoint
 library(pscl) #hurdle
-library(caret) #sensitivity and specificity
+library(caret) #sensitivity/specificity
 library(flux) #auc
 library(maptools) #gcDestination
+library(raster) 
+library(AER) #dispersiontest
+library(randomForest)
+library(GWmodel)
+library(ape) #Moran.I
 
 #source required functions
 function_list <- c("gcdHF.R",
                    "deg2rad.R",
                    "rocCurve.R",
-                   "draw_map_scale.R"
+                   "draw_map_scale.R",
+                   "getFittedGWR.R",
+                   "calcPA.R",
+                   "distToCell.R",
+                   "interpolateWithBarriers.R",
+                   "withinTimes.R",
+                   "onEffort.R",
+                   "sightingDistance.R",
+                   "sightingAngle.R",
+                   "sightingLatLong.R",
+                   "distFromKrill.R",
+                   "krillBinTimeDiff.R",
+                   "krillWeightedAverage.R",
+                   "countIndividalsAroundKrill.R",
+                   "removeRasterOverlap.R",
+                   "dfFromRaster.R"
 )
 
 for (f in function_list) {
@@ -88,41 +108,21 @@ if (length(start_datetime) != length(end_datetime)) {
 start_datetime <- start_datetime - 15/60/24 
 end_datetime   <- end_datetime + 15/60/24
 
-#functions to subset to only on effort times
-withinTimes <- function(x, start, end) {
-  
-  #check if a row is between any on effort times
-  #dataRow: row of a data frame
-  #start: vector of start date and times as a chron object
-  #end: vector of end date and times as a chron object
-  
-  datetime_chron <- x[which(names(x) == "datetime")]
-  
-  datetime <- chron(dates. = substr(datetime_chron, 2, 9), times. = substr(datetime_chron, 11, 18), 
-                  format = c(dates = "d/m/y", times = "h:m:s"))
-
-  return (any(start < datetime & end > datetime)) 
-  
-}
-
-onEffort <- function(data, start, end) {
-  
-  #for every row in a data frame, check whether it is within any on effort times
-  #if FALSE, remove the row, else move on to next row
-  #data: data frame with each row an observation
-  #start: vector of start date and times as a chron object
-  #end: vector of end date and times as a chron object
-  
-  data_oneffort <- data[apply(data, 1, FUN = withinTimes, start = start_datetime, end = end_datetime), ]
-  
-  return (data_oneffort)
-  
-}
 
 #subset krill and gps to only on effort times
 krill <- onEffort(krill, start_datetime, end_datetime)
 gps   <- onEffort(gps, start_datetime, end_datetime)
 
+#calculate time between gps readings when on effort
+gps$bin_time <- rep(NA, nrow(gps))
+for (i in 2:nrow(gps)) {
+  bin_time <- as.numeric(gps$datetime[i] - gps$datetime[i - 1])*24*60
+  
+  if (bin_time > 20) {
+    bin_time <- as.numeric(gps$datetime[i + 1] - gps$datetime[i])*24*60
+  }
+  gps$bin_time[i] <- bin_time
+}
 
 plot(krill$datetime, krill$arealDen, pch = 19, xlab = "Date", ylab = "krill density gm2")
 rug(sighting$datetime, ticksize = 0.03, side = 1, lwd = 0.5, col = "red", quiet = TRUE) #ticks at whale locations
@@ -212,97 +212,10 @@ points(krill$Longitude, krill$Latitude, col = "red", pch = 19)
 #find true lat and long of sighting using reticle
 #average human eye height on monkey island height is 15.08m
 
-sightingDistance <- function(x, reticle) {
-  
-  #calculates true line distance to sighting using height of monkey island and reticle lookup table
-  #x: row of sighting matrix for apply function
-  #reticle: reticle distance lookup table
-  
-  measured_reticle <- as.numeric(x[which(names(x) == "Reticles")])
-  
-  if (is.na(measured_reticle)) {
-    
-    hypotenuse <- as.numeric(x[which(names(x) == "Est.Distance")])/1000
-    
-  } else {
-    
-    hypotenuse <- reticle$km[which.min(abs(reticle$angle - measured_reticle))]
-    
-  }
-  
-  distance <- sqrt(hypotenuse^2 - 0.01508^2)
-
-  return(distance)
-  
-}
- 
 sighting$distance <- unlist(apply(sighting, 1, sightingDistance, reticle = reticle))
 
 
 #sighting location given specified distance
-
-
-sightingAngle <- function(x, gps) {
-  
-  #calculate the absolute heading of a sighting taking into account ships heading
-  #x = row of sighting
-  #gps = full gps matrix
-  
-  angle <- as.numeric(x[which(names(x) == "Angle")])
-  index <- as.numeric(x[which(names(x) == "GpsIndex")])
-  
-  if (length(gps$Heading[gps$Index == index]) > 0) {
-    
-    #lhs
-    if (angle <= 90) {
-      angle_true <- angle + gps$Heading[gps$Index == index]
-    } else {
-      angle_true <- gps$Heading[gps$Index == index] - (360 - angle)
-    }
-    
-    if(angle_true < 0) {
-      angle_true <- 360 + angle_true
-    }
-    
-  } else {
-    return (NA)
-  }
-  
-  return (angle_true)
-  
-}
-
-sightingLatLong <- function (x, gps) {
-  
-  #calculates the true latitude and longitude of an object from its bearing, distance and point of observation
-  #x = row of sighting
-  #gps = full gps matrix
-  #distance = distance to object in m
-  
-  index <- as.numeric(x[which(names(x) == "GpsIndex")])
-  angle <- as.numeric(x[which(names(x) == "angle_true")])
-  distance <- as.numeric(x[which(names(x) == "distance")])*1000
-  
-  if (length(gps$Longitude[gps$Index == index]) > 0) {
-    
-    lon <- destPoint(p = c(gps$Longitude[gps$Index == index], gps$Latitude[gps$Index == index]),
-                     b = angle, d = distance)[1]
-    
-    lat <- destPoint(p = c(gps$Longitude[gps$Index == index], gps$Latitude[gps$Index == index]),
-                     b = angle, d = distance)[2]
-  } else {
-    
-    lon <- NA
-    lat <- NA
-    
-  }
-  
-  true_lat_long <- cbind(lat, lon)
-  names(true_lat_long) <- c("Latitude", "Longitude")
-  
-  return(true_lat_long)
-  
-}
 
 sighting$angle_true <- apply(sighting, 1, sightingAngle, gps = gps)
 true_lat_long <- data.frame(t(apply(sighting, 1, sightingLatLong, gps = gps)))
@@ -311,88 +224,18 @@ true_lat_long <- data.frame(t(apply(sighting, 1, sightingLatLong, gps = gps)))
 p <- ggplot() + geom_point(data = krill, aes(x = Longitude, y = Latitude, size = 2, colour = log(arealDen)))
 p + scaleBar(lon = 165, lat = -66.3, distanceLon = 5, distanceLat = 2, distanceLegend = 5, dist.unit = "km", orientation = FALSE) + 
   #geom_point(aes(x = gps$Longitude[gps$Index %in% sighting$GpsIndex], y = gps$Latitude[gps$Index %in% sighting$GpsIndex]), color = "red") + 
-  geom_point(data = true_lat_long, aes(x = Longitude, y = Latitude, size = 2), shape = 8, color = "orange") + 
+  geom_point(data = true_lat_long, aes(x = Longitude, y = Latitude, size = 2), shape = 8, color = "red") + 
   theme_bw() +
   scale_color_gradient(low="blue", high="yellow", na.value="white")
 
 
 #--------------------------- WEIGHTED KRILL DENSITY AROUND EACH SIGHTING -------------------------------#
 
-timeDifference <- function (sighting, krill) {
-  
-  #calculates time in hours between each sighting and each krill bin
-  #sighting: full sighting matrix with datetime column
-  #krill: full krill matrix with datetime column
-  
-  diff_hours <- matrix(NA, nrow = nrow(krill), ncol = nrow(sighting))
-  
-  for (i in 1:length(sighting$datetime)) {
-    for (j in 1:length(krill$datetime)) {
-      diff_hours[j, i] <- abs(as.numeric(sighting$datetime[i] -  krill$datetime[j])*24)
-    }
-  }
-  
-  return(diff_hours)
-  
-}
-
-distFromPoint <- function (x, krill, gps, truePosition=FALSE) {
-  
-  #returns distance in kms of each krill bin from each sighting
-  #x: row of sighting from apply function
-  #krill: full matrix of krill locations
-  #gps: gps lookup matrix for whale sightings
-  #truePosition: is the x matrix used the true position of the sighting or the observation location (default)
-  #set truePosition=TRUE if using true_lat_long with colnames "Latitude" and "Longitude"
-  
-  distance <- NULL
-  
-  if(!truePosition) {
-    
-    origin_long <- deg2rad(gps$Longitude[gps$Index == as.numeric(x[which(names(x) == "GpsIndex")])])
-    origin_lat  <- deg2rad(gps$Latitude[gps$Index == as.numeric(x[which(names(x) == "GpsIndex")])])
-    
-  } else {
-    
-    origin_long <- deg2rad(as.numeric(x[which(names(x) == "Longitude")]))
-    origin_lat  <- deg2rad(as.numeric(x[which(names(x) == "Latitude")]))
-    
-  }
-  
-  for (j in 1:length(krill$Latitude)) {
-    distance[j] <- gcdHF(origin_lat, origin_long, deg2rad(krill$Latitude)[j], deg2rad(krill$Longitude)[j])    
-  }
-  
-  distance[distance > 10000] <- NA
-
-  return(distance)
-  
-}
-
-krillWeighted <- function(distance, threshold, time) {
-  
-  #calculates the weighted mean of krill around a sighting within a specified distance interval
-  #distance: matrix of distance to each krill bin from each sighting from distFromPoint function
-  #threshold: the threshold distance in km from each sighting of krill bins to use
-  #time: time_difference matrix of time (hrs) between all sightings and krill bins
-  
-  krill_mean <- NULL
-  for (i in 1:ncol(distance)) {
-    weight <- 1/distance[, i]
-    weight[weight < 1/threshold] <- 0
-    weight[time[, i] > 1] <- 0 #exclude krill measured >1 hr since sighting
-    krill_mean[i] <- weighted.mean(x = krill$arealDen, w = weight, na.rm = TRUE) 
-  }
-  
-  return(krill_mean)
-  
-}
-
-time_difference <- timeDifference(sighting, krill)
+time_difference <- krillBinTimeDiff(sighting, krill)
 
 #using observation location
-distance   <- apply(sighting, 1, FUN = distFromPoint, krill = krill, gps = gps)
-krill_mean <- krillWeighted(distance, threshold = 5, time = time_difference)
+distance   <- apply(sighting, 1, FUN = distFromKrill, krill = krill, gps = gps)
+krill_mean <- krillWeightedAverage(distance, threshold = 5, time = time_difference)
 
 plot(krill_mean, sighting$BestNumber, xlab = "mean krill density (gm2)", ylab = "Count in sighting")
 title("Weighted mean krill density in 5km radius around sightings")
@@ -400,8 +243,8 @@ title("Weighted mean krill density in 5km radius around sightings")
 #using estimated sighting location
 sighting$angle_true <- apply(sighting, 1, sightingAngle, gps = gps)
 true_lat_long <- data.frame(t(apply(sighting, 1, sightingLatLong, gps = gps)))
-distance   <- apply(true_lat_long, 1, FUN = distFromPoint, krill = krill, gps = gps, truePosition = TRUE)
-krill_mean <- krillWeighted(distance, threshold = 5, time = time_difference)
+distance   <- apply(true_lat_long, 1, FUN = distFromKrill, krill = krill, gps = gps, truePosition = TRUE)
+krill_mean <- krillWeightedAverage(distance, threshold = 5, time = time_difference)
 
 plot(krill_mean, sighting$BestNumber, pch = 19, xlab = "mean krill density (gm2)", ylab = "Count in sighting")
 title("Weighted mean krill density in 5km radius around sightings")
@@ -462,20 +305,8 @@ auc(M.ROC[1,], M.ROC[2,])
   
   
 #number of individuals within 5km
-countIndividuals <- function (x, sighting, threshold) {
-  
-  #calculates the number of individual whales within a specified distance of each krill bin
-  #x: row of distance matrix for apply function
-  #sighting: full sighting matrix
-  #threshold: maximum distance (km) for a sighting to be included
-  
-  count <- sum(sighting$BestNumber[which(x < threshold)])
-  
-  return (count)
-  
-}
 
-whale_number <- apply(distance, 1, countIndividuals, sighting = sighting, threshold = 5)
+whale_number <- apply(distance, 1, countIndividualsAroundKrill, sighting = sighting, threshold = 5)
 
 plot(krill$arealDen, whale_number, pch = 19, xlab = "krill density gm2", ylab = "number of whales")
 title("Number of whales within 5km of a krill bin")
@@ -537,12 +368,12 @@ for (i in 1:length(krill$datetime)) {
 }
 
 par(mfrow = c(1, 6))
-boxplot(krill_env$Sightability ~ whale_present)
-boxplot(krill_env$SeaState~ whale_present)
-boxplot(krill_env$Swell~ whale_present)
-boxplot(krill_env$Visibility~ whale_present)
-boxplot(krill_env$CloudCover~ whale_present)
-boxplot(krill_env$Intensity~ whale_present)
+boxplot(krill_env$Sightability ~ whale_present, main = "Sightability")
+boxplot(krill_env$SeaState~ whale_present, main = "Sea State")
+boxplot(krill_env$Swell~ whale_present, main = "Swell")
+boxplot(krill_env$Visibility~ whale_present, main = "Visibility")
+boxplot(krill_env$CloudCover~ whale_present, main = "Cloud Cover")
+boxplot(krill_env$Intensity~ whale_present, main = "Glare Intensity")
 
 #only significant variables after backwards selection
 krill.glm <- glm(whale_number ~ log(arealDen) + krill_env$CloudCover, family = binomial)
@@ -561,19 +392,465 @@ table(whale_present[!is.na(arealDen)], whale_estimate)
 
 #how many krill bins within 15km (on same trackline?)
 
-krill_time_difference <- timeDifference(krill, krill)
-krill_distance <- apply(krill, 1, FUN = distFromPoint, krill = krill, gps = gps, truePosition=TRUE)
+krill_time_difference <- krillBinTimeDiff(krill, krill)
+krill_distance <- apply(krill, 1, FUN = distFromKrill, krill = krill, gps = gps, truePosition=TRUE)
 
 krill_distance[krill_time_difference > 1] <- NA #remove values from another day
 
+#------------------------------- RASTER MAP OF KRILL AND WHALES --------------------------------- #
+
+#for each lat/long on the map, give an effort score
+#effort = 0 if no krill cells within horizon distance (13.46km)
+
+#find box size distance (km)
+km <- 10
+box_x <- round(gcdHF(deg2rad(-67.7), deg2rad(162), deg2rad(-67.7), deg2rad(165.2))/km)
+box_y <- round(gcdHF(deg2rad(-67.7), deg2rad(162), deg2rad(-66), deg2rad(162))/km)
+
+location_grid <- raster(ncol = box_x, nrow = box_y, xmn = 162, xmx = 165.2, ymn = -67.7, ymx = -66)
+
+krill$arealDen[krill$arealDen == 0] <- NA
+krill_raster <- rasterize(cbind(krill$Longitude, krill$Latitude), location_grid, log(krill$arealDen), fun = mean)
+whale_raster <- rasterize(rev(true_lat_long), location_grid, rep(1, nrow(true_lat_long)), fun = sum)
+effort       <- rasterize(cbind(gps$Longitude, gps$Latitude), location_grid, gps$bin_time, fun = sum)
+sea_state    <- rasterize(cbind(krill$Longitude, krill$Latitude), location_grid, krill_env$SeaState, fun = mean)
+sightability <- rasterize(cbind(krill$Longitude, krill$Latitude), location_grid, krill_env$Sightability, fun = mean)
+cloud        <- rasterize(cbind(krill$Longitude, krill$Latitude), location_grid, krill_env$CloudCover, fun = mean)
+
+#create raster stack of predictors
+predictors <- stack(krill_raster, sea_state, sightability, cloud)
+names(predictors) <- c('krill', 'sea_state', 'sightability', 'cloud') 
+plot(predictors)
+
+whale_zeros <- getValues(whale_raster)
+whale_zeros[!is.na(getValues(krill_raster)) & is.na(getValues(whale_raster))] <- 0
+whale_raster <- setValues(whale_raster, whale_zeros)
+
+par(mfrow = c(1, 2))
+plot(whale_raster, main = "Total whale sightings")
+plot(effort, main = "Effort - time spent in cell (mins)")
+
+#dist from top in km
+x <- coordinates(krill_raster)[, 1]
+y <- coordinates(krill_raster)[, 2]
+
+cell_x <- colFromX(effort, x)
+cell_y <- rowFromY(effort, y)
+
+d <- data.frame(cbind(getValues(whale_raster)/getValues(effort)*60, getValues(predictors), x, y))
+d <- data.frame(cbind(d[, 1], apply(d[, c(2:7)], 2, FUN = scale, scale = FALSE)))
+names(d) <- c("whales_per_hour", "krill", "sea_state", "sightability", "cloud", "long", "lat")
+d$whales_per_hour[!is.na(d$krill) & is.na(d$whales_per_hour)] <- 0
+d <- na.omit(d)
+
+whale_pa <- rep(0, nrow(d))
+whale_pa[d$whales_per_hour > 0] <- 1
+
+
+#---------------------------------- MODELS ---------------------------------#
+
+#poisson hurdle model
+raster.hurdle <- hurdle(round(whales_per_hour) ~ sightability + lat*long + cloud | 
+                     krill - 1, dist = "poisson", zero.dist = "binomial", link = "logit", data = d)
+summary(raster.hurdle)
+
+hurdle.ss <- calcPA(raster.hurdle, whale_pa, d)
+
+#zero inflated poisson model
+raster.zeroinfl <- zeroinfl(round(whales_per_hour)  ~ sightability + sea_state + cloud + krill + lat*long | 
+                              krill - 1, dist = "poisson", link = "logit", data = d)
+summary(raster.zeroinfl)
+
+zeroinfl.ss <- calcPA(raster.zeroinfl, whale_pa, d)
+
+#poisson glm
+
+
+raster.glm <- glm(round(whales_per_hour) ~ krill*long + lat*long + sightability + sea_state - 1, family = "poisson", data = d)
+summary(raster.glm)
+
+vif(raster.glm)
+
+dispersiontest(raster.glm, alternative ="greater") #test for overdispersion of poisson glm
+
+raster.null <- glm(round(whales_per_hour) ~ 1, family = "poisson", data = d)
+anova(raster.glm, raster.null, test = "Chi") #analysis of deviance against the null model
+
+glm.ss <- calcPA(raster.glm, whale_pa, d)
+
+#raster plot of observed vs predicted on the same colour scale
+
+predicted <- effort
+predicted_full <- rep(NA, length(getValues(whale_raster)))
+predicted_full[as.numeric(names(fitted(raster.glm)))] <- round(fitted(raster.glm))
+predicted_full <- predicted_full*getValues(effort)/60
+predicted <- setValues(predicted, predicted_full)
+
+par(mfrow = c(1, 2))
+plot(whale_raster, col=rev(terrain.colors(ceiling(maxValue(predicted)))), breaks = seq(0, ceiling(maxValue(predicted))))
+plot(predicted, col=rev(terrain.colors(ceiling(maxValue(predicted)))), breaks = seq(0, ceiling(maxValue(predicted))))
+
+
+#negative binomial model
+
+raster.nb <- glm.nb(round(whales_per_hour) ~ krill*lat + lat*long, data = d, maxit = 1000)
+summary(raster.nb)
+
+nb.ss <- calcPA(raster.nb, whale_pa, d)
+
+#quasipoisson
+
+raster.qpois <- glm(round(whales_per_hour) ~ krill*long + lat + sightability + sea_state - 1, family = "quasipoisson", data = d)
+summary(raster.qpois)
+
+qpois.ss <- calcPA(raster.qpois, whale_pa, d)
+
+#random forest 
+
+raster.rf <- randomForest(round(whales_per_hour) ~ krill + lat + long + sea_state + sightability + cloud, data = d)
+raster.rf$importance
+
+
+#------------------------------ COMPARE MODELS ---------------------------------#
+
+
+#compare log likelihoods
+
+c("hurdle" = logLik(raster.hurdle), "ZIP" =  logLik(raster.zeroinfl), "Pois" = logLik(raster.glm), "Quasi-Pois" = logLik(raster.qpois), "NB" = logLik(raster.nb))
+
+
+#compare zero counts
+
+round(c("Obs" = sum(d$whales_per_hour < 1), "hurdle" = sum(predict(raster.hurdle, type = "prob")[, 1]), 
+        "ZIP" = sum(predict(raster.zeroinfl, type = "prob")[, 1]),
+          "Pois" = sum(dpois(0, fitted(raster.glm))), "Quasi-Pois" = sum(dpois(0, fitted(raster.qpois))), 
+        "NB" = sum(dnbinom(0, mu = fitted(raster.nb), size = raster.nb$theta)), 
+      "Random Forest" = sum(raster.rf$predicted < 0.5)))
+
+
+#Observed vs fitted plots
+
+par(mfrow = c(2, 3))
+
+plot(d$whales_per_hour, fitted(raster.hurdle), pch = 19, ylim = c(0, 65), main = "Hurdle")
+points(c(0, 100), c(0, 100), col = "red", type = "l")
+
+plot(d$whales_per_hour, fitted(raster.zeroinfl), ylim = c(0, 65), pch = 19, main = "ZIP")
+points(c(0, 100), c(0, 100), col = "red", type = "l")
+
+plot(d$whales_per_hour, fitted(raster.glm), pch = 19, main = "Poisson")
+points(c(0, 100), c(0, 100), col = "red", type = "l")
+
+plot(d$whales_per_hour, fitted(raster.nb), pch = 19, ylim = c(0, 65), main = "NB")
+points(c(0, 100), c(0, 100), col = "red", type = "l")
+
+plot(d$whales_per_hour, fitted(raster.qpois), pch = 19, main = "Quasi-Poisson", ylim = c(0, 65))
+points(c(0, 100), c(0, 100), col = "red", type = "l")
+
+plot(d$whales_per_hour, raster.rf$predicted, pch = 19, main = "Random Forest", ylim = c(0, 65))
+points(c(0, 100), c(0, 100), col = "red", type = "l")
+
+
+#plot sensitivity and specificity for each model
+
+ss_type <- data.frame(factor(), numeric(), factor()) 
+new_rows <- cbind("model" = rep(c("hurdle", "zeroinfl", "glm", "nb", "qpois"), each = 2), 
+                  "value" = rep(c("sensitivity", "specificity"), 5),
+                 "sens" = as.numeric(c(unlist(hurdle.ss), unlist(zeroinfl.ss), unlist(glm.ss), unlist(nb.ss), unlist(qpois.ss))))
+ss_type <- rbind(ss_type, new_rows)
+
+ggplot(ss_type, aes(value, sens, group = model, size = 2, colour = model)) + 
+  theme_bw() + 
+  geom_point() + 
+  geom_line() + 
+  xlab("") + 
+  ylab("") + 
+  guides(size = FALSE)
+
+
+
+# ------------------------- GEOGRAPHICALLY WEIGHTED REGRESSION --------------------------#
+
+
+d <- data.frame(cbind(getValues(whale_raster), getValues(effort), getValues(predictors), x, y))
+d <- data.frame(cbind(d[, c(1, 7, 8)], apply(d[, c(2:6)], 2, FUN = scale, scale = FALSE)))
+names(d) <- c("whales", "long", "lat", "effort", "krill", "sea_state", "sightability", "cloud")
+d <- na.omit(d)
+
+whale_pa <- rep(0, nrow(d))
+whale_pa[d$whales > 0] <- 1
+
+raster.glm <- glm(whales ~ krill + sea_state + cloud, family = "poisson", data = d)
+summary(raster.glm)
+
+
+dispersiontest(raster.glm, alternative ="greater") #test for overdispersion of poisson glm
+
+raster.null <- glm(whales ~ 1, family = "poisson", data = d)
+anova(raster.glm, raster.null, test = "Chi") #analysis of deviance against the null model
+
+glm.ss <- calcPA(raster.glm, whale_pa, d)
+
+plot(d$whales, fitted(raster.glm), pch = 19, main = "Poisson")
+points(c(0, 100), c(0, 100), col = "red", type = "l")
+
+#test for spatial autocorrelation using Moran's I
+
+dists <- as.matrix(dist(cbind(d$long, d$lat)))
+dists.inv <- 1/dists
+diag(dists.inv) <- 0
+
+Moran.I(residuals(raster.glm), dists.inv)
+
+
+#modify distances to include path distance not shortest path
+
+
+
+dists <- gw.dist(cbind(d$long, d$lat), longlat = TRUE)
+
+sp.data <- SpatialPointsDataFrame(coords <- cbind(d$long, d$lat), data = d, proj4string=CRS("+proj=longlat +datum=WGS84"))
+
+
+#best model selected using AIC
+gwr.formula <- formula(whales ~ krill + cloud + sea_state)
+
+#choose bandwidth
+raster.gwr.bw <- bw.ggwr(gwr.formula, data = sp.data, adaptive = FALSE, family = "poisson",
+                      longlat = TRUE, dMat = dists, approach = "AIC", kernel = "gaussian")
+
+#poisson gwr
+#using fixed bandwidth of 20km to avoid crossing islands
+raster.gwr <- gwr.generalised(gwr.formula, data = sp.data, bw = 20, adaptive = FALSE, family = "poisson",
+          longlat = TRUE, kernel = "gaussian")
+raster.gwr
+
+#calculate gwr fitted values
+gwr.model.fitted <- getFittedGWR(raster.gwr, d)
+
+
+par(mfrow = c(1, 2))
+
+plot(d$whales, raster.gwr$glm.res$fitted.values, pch = 19, main = "GLM", ylim = c(0, max(d$whales)))
+points(c(0, 100), c(0, 100), col = "red", type = "l")
+
+plot(d$whales, gwr.model.fitted, pch = 19, main = "GWR GLM", ylim = c(0, max(d$whales)))
+points(c(0, 100), c(0, 100), col = "red", type = "l")
+
+
+#plot explanatory variable coefficients geographically
+results <- as.data.frame(raster.gwr$SDF)
+
+par(mfrow = c(1, length(raster.gwr$glm.res$coefficients)))
+
+for (i in names(raster.gwr$glm.res$coefficients)) {
+  
+  plot(rasterize(cbind(results$coords.x1, results$coords.x2), location_grid, results[, names(results) == i], fun = sum), main = i)
+  
+}
+
+
+
+#----------------------------------- INTERPOLATION WITH BARRIERS -----------------------------------------#
+
+
+#plot of Balleny Islands
+
+library(maps)
+library(mapdata)
+library(ipdw)
+
+balleny_map <- map("world2Hires", regions=c("Antarctica:Young Island", "Antarctica:Buckle Island", "Antarctica:Sturge Island"))
+balleny_poly <- map2SpatialPolygons(balleny_map, IDs = balleny_map$names, proj4string=CRS("+proj=longlat +datum=WGS84"))
+
+#set up goal resolution
+km <- 10
+box_x <- round(gcdHF(deg2rad(-67.7), deg2rad(162), deg2rad(-67.7), deg2rad(165.2))/km)
+box_y <- round(gcdHF(deg2rad(-67.7), deg2rad(162), deg2rad(-66), deg2rad(162))/km)
+location_grid <- raster(ncol = box_x, nrow = box_y, xmn = 162, xmx = 165.2, ymn = -67.7, ymx = -66)
+island <- rasterize(balleny_poly, location_grid, field = 1, background = 10000)
+
+#set up shortest path resolution
+km <- 1
+box_x <- round(gcdHF(deg2rad(-67.7), deg2rad(162), deg2rad(-67.7), deg2rad(165.2))/km)
+box_y <- round(gcdHF(deg2rad(-67.7), deg2rad(162), deg2rad(-66), deg2rad(162))/km)
+
+location_grid <- raster(ncol = box_x, nrow = box_y, xmn = 162, xmx = 165.2, ymn = -67.7, ymx = -66)
+
+#create cost raster
+#islands and barriers given 1 and sea 10000
+costras <- rasterize(balleny_poly, location_grid, field = 1, background = 10000)
+tr <- transition(costras, transitionFunction = mean, 8)
+tr <- geoCorrection(tr, type="c")
+
+
+#grid centered at goal_coords omitting cells over islands
+goal_coords <- coordinates(island)[getValues(island) == 10000, ]
+
+true_lat_long <- na.omit(true_lat_long)
+
+
+#interpolate for whales
+
+dist_mat  <- distToCell(goal_coords, true_lat_long, tr)
+whale_int <- interpolateWithBarriers(dist_mat, goal_coords, island, FUN = "count")
+
+par(mfrow = c(1, 2))
+plot(whale_raster)
+plot(balleny_poly, col = "grey", add = TRUE)
+plot(whale_int)
+plot(balleny_poly, col = "grey", add = TRUE)
+
+#interpolate for krill
+
+dist_mat  <- distToCell(goal_coords, data.frame(cbind(krill$Latitude, krill$Longitude)), tr)
+krill_int <- interpolateWithBarriers(dist_mat, goal_coords, island, FUN = "mean", dat = log(krill$arealDen))
+
+par(mfrow = c(1, 2))
+plot(krill_raster)
+plot(balleny_poly, col = "grey", add = TRUE)
+plot(krill_int)
+plot(balleny_poly, col = "grey", add = TRUE)
+
+#interpolate for environmental conditions
+
+sea_state_int    <- interpolateWithBarriers(dist_mat, goal_coords, island, FUN = "mean", dat = krill_env$SeaState)
+sightability_int <- interpolateWithBarriers(dist_mat, goal_coords, island, FUN = "mean", dat = krill_env$Sightability)
+cloud_int        <- interpolateWithBarriers(dist_mat, goal_coords, island, FUN = "mean", dat = krill_env$CloudCover)
+
+#interpolate for effort
+
+dist_mat   <- distToCell(goal_coords, data.frame(cbind(gps$Latitude, gps$Longitude)), tr)
+effort_int <- interpolateWithBarriers(dist_mat, goal_coords, island, FUN = "sum", dat = gps$bin_time)
+
+#create raster stack of all variables
+whale_zeros <- getValues(whale_raster)
+whale_zeros[!is.na(getValues(effort)) & is.na(getValues(whale_raster))] <- 0
+whale_raster <- setValues(whale_raster, whale_zeros)
+
+variables <- stack(whale_raster, effort, krill_raster, sea_state, sightability, cloud)
+names(variables) <- c('whales', 'effort', 'krill', 'sea_state', 'sightability', 'cloud') 
+
+#create data frame of all variables
+d <- dfFromRaster(variable_stack = variables, centre_vars = 2:6)
+
+whale_pa <- rep(0, nrow(d))
+whale_pa[d$whales > 0] <- 1
+
+
+
+#----------------------------- REMOVING CELLS OVERLAPPING ISLANDS ----------------------------#
+
+
+#find box size distance (km) and set up raster template
+km <- 10
+box_x <- round(gcdHF(deg2rad(-67.7), deg2rad(162), deg2rad(-67.7), deg2rad(165.2))/km)
+box_y <- round(gcdHF(deg2rad(-67.7), deg2rad(162), deg2rad(-66), deg2rad(162))/km)
+
+location_grid <- raster(ncol = box_x, nrow = box_y, xmn = 162, xmx = 165.2, ymn = -67.7, ymx = -66)
+
+#create rasters
+krill_raster <- rasterize(cbind(krill$Longitude, krill$Latitude), location_grid, log(krill$arealDen), fun = mean)
+whale_raster <- rasterize(rev(true_lat_long), location_grid, rep(1, nrow(true_lat_long)), fun = sum)
+effort       <- rasterize(cbind(gps$Longitude, gps$Latitude), location_grid, gps$bin_time, fun = sum)
+sea_state    <- rasterize(cbind(krill$Longitude, krill$Latitude), location_grid, krill_env$SeaState, fun = mean)
+sightability <- rasterize(cbind(krill$Longitude, krill$Latitude), location_grid, krill_env$Sightability, fun = mean)
+cloud        <- rasterize(cbind(krill$Longitude, krill$Latitude), location_grid, krill_env$CloudCover, fun = mean)
+
+
+rasterList <- list("krill_raster" = krill_raster, "whale_raster" = whale_raster, "effort" = effort, 
+                   "sea_state" = sea_state, "sightability" = sightability, "cloud" = cloud)
+
+for (item in 1:length(rasterList)) {
+  
+  removed <- removeRasterOverlap(rasterList[[item]], balleny_poly, allowance = 50)
+  assign(names(rasterList)[item], removed)
+  
+}
+
+#create raster stack of all variables
+whale_zeros <- getValues(whale_raster)
+whale_zeros[!is.na(getValues(effort)) & is.na(getValues(whale_raster))] <- 0
+whale_raster <- setValues(whale_raster, whale_zeros)
+
+variables <- stack(whale_raster, effort, krill_raster, sea_state, sightability, cloud)
+names(variables) <- c('whales', 'effort', 'krill', 'sea_state', 'sightability', 'cloud') 
+
+par(mfrow = c(2, 3))
+for (item in 1:length(variables)) {
+  
+  plot(variables[[item]], main = names(variables)[item])
+  plot(balleny_poly, col = "grey", add = T) 
+  
+}
+
+
+
+#create data frame of all variables
+d <- dfFromRaster(variable_stack = variables, centre_vars = 2:6)
+
+whale_pa <- rep(0, nrow(d))
+whale_pa[d$whales > 0] <- 1
 
 
 
 
+#glm
+
+raster.glm <- glm(whales ~ krill + cloud + sea_state, family = "poisson", data = d)
+summary(raster.glm)
+
+glm.ss <- calcPA(raster.glm, whale_pa, d)
 
 
+dists <- gw.dist(cbind(d$long, d$lat), longlat = TRUE)
+
+sp.data <- SpatialPointsDataFrame(coords <- cbind(d$long, d$lat), data = d, proj4string=CRS("+proj=longlat +datum=WGS84"))
 
 
+#best model selected using AIC
+gwr.formula <- formula(whales ~ krill + cloud + sea_state)
+
+#choose bandwidth
+raster.gwr.bw <- bw.ggwr(gwr.formula, data = sp.data, adaptive = FALSE, family = "poisson",
+                         longlat = TRUE, dMat = dists, approach = "AIC", kernel = "gaussian")
+
+#poisson gwr
+raster.gwr <- gwr.generalised(gwr.formula, data = sp.data, bw = raster.gwr.bw, adaptive = FALSE, family = "poisson",
+                              longlat = TRUE, kernel = "gaussian")
+raster.gwr
+
+#calculate gwr fitted values
+gwr.model.fitted <- getFittedGWR(raster.gwr, d)
+
+gwr_ss <- calcPA(raster.gwr, whale_pa, d)
+
+
+par(mfrow = c(1, 2))
+
+plot(d$whales, fitted(raster.glm), pch = 19, main = "GLM", ylim = c(0, max(d$whales)))
+points(c(0, 100), c(0, 100), col = "red", type = "l")
+
+plot(d$whales, gwr.model.fitted, pch = 19, main = "GWR GLM", ylim = c(0, max(d$whales)))
+points(c(0, 100), c(0, 100), col = "red", type = "l")
+
+
+#calculate RMSE
+sqrt(sum((round(fitted(raster.glm)) - d$whales)^2)/nrow(d)) #glm
+sqrt(sum((round(gwr.model.fitted) - d$whales)^2)/nrow(d)) #gwr
+
+
+#plot explanatory variable coefficients geographically
+results <- as.data.frame(raster.gwr$SDF)
+
+par(mfrow = c(1, length(raster.gwr$glm.res$coefficients)), oma = c(1, 1, 1, 3))
+
+for (i in names(raster.gwr$glm.res$coefficients)) {
+  
+  plot(rasterize(cbind(results$coords.x1, results$coords.x2), location_grid, results[, names(results) == i], fun = sum), main = i)
+  plot(balleny_poly, col = "grey", add = TRUE)
+  
+}
 
 
 
