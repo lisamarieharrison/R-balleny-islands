@@ -849,7 +849,7 @@ for (i in names(raster.gwr$glm.res$coefficients)) {
   
   plot(rasterize(cbind(results$coords.x1, results$coords.x2), location_grid, results[, names(results) == i], fun = sum), main = i)
   plot(balleny_poly, col = "grey", add = TRUE)
-  
+   
 }
 
 
