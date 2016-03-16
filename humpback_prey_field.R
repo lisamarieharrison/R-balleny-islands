@@ -71,9 +71,9 @@ gps$datetime      <- chron(dates. = as.character(gps$PCTime), times. = gps$Time,
 env$GpsTime.1     <- substr(as.POSIXct(env$GpsTime.1, format = "%I:%M:%S %p", tz = "GMT"), 12, 19)
 env$datetime      <- chron(dates. = as.character(env$Time), times. = env$GpsTime.1, format = c(dates = "d/m/y", times = "h:M:S %p"))
 
-sighting    <- subset(sighting, sighting$datetime >= min(krill$datetime) & sighting$datetime <= max(krill$datetime))
-gps         <- subset(gps, gps$datetime >= min(krill$datetime) & gps$datetime <= max(krill$datetime))
-effort      <- subset(effort, effort$datetime >= min(krill$datetime) & effort$datetime <= max(krill$datetime))
+sighting <- subset(sighting, sighting$datetime >= min(krill$datetime) & sighting$datetime <= max(krill$datetime))
+gps      <- subset(gps, gps$datetime >= min(krill$datetime) & gps$datetime <= max(krill$datetime))
+effort   <- subset(effort, effort$datetime >= min(krill$datetime) & effort$datetime <= max(krill$datetime))
 
 #effort where MI observers present
 #next zero cell included to give total time on effort
@@ -107,6 +107,15 @@ krill <- onEffort(krill, start_datetime, end_datetime)
 gps   <- onEffort(gps, start_datetime, end_datetime)
 
 #calculate time between gps readings when on effort
+
+calcGPSBinTime <- function(x) {
+  
+  bin_time <- as.numeric(x - tail(x, -1))*24*60 
+  
+}
+
+lapply(gps$datetime)
+
 gps$bin_time <- rep(NA, nrow(gps))
 for (i in 2:nrow(gps)) {
   bin_time <- as.numeric(gps$datetime[i] - gps$datetime[i - 1])*24*60
