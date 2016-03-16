@@ -3,7 +3,14 @@
 #date: 10/02/2016
 #3 passes over the same transect so time and date used to match sightings rather than lat and long
 
-setwd(dir = "C:/Users/43439535/Documents/Lisa/phd/Balleny Islands/csv")
+if (Sys.info()[4] == "SCI-6246") {
+  setwd(dir = "C:/Users/43439535/Documents/Lisa/phd/Balleny Islands/csv")
+  source_location <- "C:/Users/43439535/Documents/Lisa/phd/Mixed models/R code/R-functions-southern-ocean/"
+} else {
+  setwd(dir = "C:/Users/Lisa/Documents/phd/southern ocean/Balleny Islands/csv")
+  source_location <- "C:/Users/Lisa/Documents/phd/southern ocean/Mixed models/R code/R-functions-southern-ocean/"
+}
+
 gps      <- read.csv("GpsData.csv", header = T)
 sighting <- read.csv("Sighting.csv", header = T)
 env      <- read.csv("Environment.csv", header = T)
@@ -28,7 +35,7 @@ function_list <- c("gcdHF.R",
 )
 
 for (f in function_list) {
-  source(paste("C:/Users/43439535/Documents/Lisa/phd/Mixed models/R code/R-functions-southern-ocean/", f, sep = ""))
+  source(paste(source_location, f, sep = ""))
 }
 
 #subset sightings to only HB whales (HB = Species 07) & to only MI platform
