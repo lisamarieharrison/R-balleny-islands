@@ -9,7 +9,7 @@ if (Sys.info()[4] == "SCI-6246") {
 } else {
   setwd(dir = "C:/Users/Lisa/Documents/phd/southern ocean/Balleny Islands/csv")
   source_location <- "C:/Users/Lisa/Documents/phd/southern ocean/Mixed models/R code/R-functions-southern-ocean/"
-}
+} 
 
 gps      <- read.csv("GpsData.csv", header = T)
 sighting <- read.csv("Sighting.csv", header = T)
@@ -78,9 +78,9 @@ gps$datetime      <- chron(dates. = as.character(gps$PCTime), times. = gps$Time,
 env$GpsTime.1     <- substr(as.POSIXct(env$GpsTime.1, format = "%I:%M:%S %p", tz = "GMT"), 12, 19)
 env$datetime      <- chron(dates. = as.character(env$Time), times. = env$GpsTime.1, format = c(dates = "d/m/y", times = "h:M:S %p"))
 
-sighting    <- subset(sighting, sighting$datetime >= min(krill$datetime) & sighting$datetime <= max(krill$datetime))
-gps         <- subset(gps, gps$datetime >= min(krill$datetime) & gps$datetime <= max(krill$datetime))
-effort      <- subset(effort, effort$datetime >= min(krill$datetime) & effort$datetime <= max(krill$datetime))
+sighting <- subset(sighting, sighting$datetime >= min(krill$datetime) & sighting$datetime <= max(krill$datetime))
+gps      <- subset(gps, gps$datetime >= min(krill$datetime) & gps$datetime <= max(krill$datetime))
+effort   <- subset(effort, effort$datetime >= min(krill$datetime) & effort$datetime <= max(krill$datetime))
 
 #effort where MI observers present
 #next zero cell included to give total time on effort
@@ -114,6 +114,15 @@ krill <- onEffort(krill, start_datetime, end_datetime)
 gps   <- onEffort(gps, start_datetime, end_datetime)
 
 #calculate time between gps readings when on effort
+
+calcGPSBinTime <- function(x) {
+  
+  bin_time <- as.numeric(x - tail(x, -1))*24*60 
+  
+}
+
+lapply(gps$datetime)
+
 gps$bin_time <- rep(NA, nrow(gps))
 for (i in 2:nrow(gps)) {
   bin_time <- as.numeric(gps$datetime[i] - gps$datetime[i - 1])*24*60
@@ -144,8 +153,10 @@ d + scale_colour_gradient(low = "grey", high = "blue", name = "Krill density gm2
 whale_present <- rep(FALSE, nrow(krill))
 whale_number  <- rep(0, nrow(krill))
 sighting_id   <- NULL
+closest_cell <-  NULL
 for (i in 1:nrow(sighting)) {
   w <- which.min(abs(sighting$datetime[i] - krill$datetime)*24*60)
+  closest_cell[i] <- w
   if (abs(sighting$datetime[i] - krill$datetime[w])*24*60 <= 15) {
     whale_present[w] <- TRUE
     whale_number[w]  <- whale_number[w] + sighting$BestNumber[i]
