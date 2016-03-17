@@ -141,7 +141,18 @@ for (i in 1:nrow(sighting)) {
   }
 }
 
+krill$arealDen[krill$arealDen == 0] <- 0.0001
+
+obs_count <- rep(0, nrow(krill))
+obs_count[as.numeric(names(table(closest_cell)))] <- table(closest_cell)
+
 #------------------------------ DENSITY SURFACE MODEL ----------------------------------------#
+
+
+balleny_map <- map("world2Hires", regions=c("Antarctica:Young Island", "Antarctica:Buckle Island", "Antarctica:Sturge Island"))
+balleny_poly <- map2SpatialPolygons(balleny_map, IDs = balleny_map$names, proj4string=CRS("+proj=longlat +datum=WGS84"))
+balleny_poly_utm <- spTransform(balleny_poly, CRS("+proj=utm +zone=58 +south +ellps=WGS84"))
+
 
 #fit detection function
 
@@ -156,37 +167,30 @@ plot(det_function)
 
 xy <- SpatialPoints(cbind(krill$Longitude, krill$Latitude))
 proj4string(xy) <- CRS("+proj=longlat +datum=WGS84")  ## for example
-res <- spTransform(xy, CRS("+proj=utm +zone=51 ellps=WGS84"))
+res <- spTransform(xy, CRS("+proj=utm +zone=58 +south +ellps=WGS84"))
 
 
 
-segdata <- data.frame(cbind(krill$Longitude, krill$Latitude, coordinates(res), krill$Distance_vl, c(1:nrow(krill))))
-colnames(segdata) <- c("longitude", "latitude", "x", "y", "Effort", "Sample.Label")
+segdata <- data.frame(cbind(krill$Longitude, krill$Latitude, coordinates(res), krill$Distance_vl, c(1:nrow(krill)), log(krill$arealDen)))
+colnames(segdata) <- c("longitude", "latitude", "x", "y", "Effort", "Sample.Label", "krill")
 
 
 obsdata <- data.frame(cbind(c(1:nrow(sighting)), closest_cell, sighting$BestNumber, sighting$distance))
 names(obsdata) <- c("object", "Sample.Label", "size", "distance")
 obsdata <- na.omit(obsdata)
 
-dsm.formula <- formula(whales ~ krill + cloud + sea_state + sightability + lat + long)
 
-
-whale.dsm <- dsm(formula = count ~ s(x, y), det_function, segment.data = segdata, observation.data = obsdata, method="REML")
+whale.dsm <- dsm(formula = count ~ s(x, y) + krill, det_function, segment.data = segdata, observation.data = obsdata, method="REML")
 summary(whale.dsm)
 
-
-vis.gam(whale.dsm, plot.type="contour", view = c("x","y"), asp = 1, type = "response", contour.col = "black", 
-        n.grid = 100, xlim = range(segdata$x))
-
-
-
+#plot relative counts over the smooth space
+vis.gam(whale.dsm, plot.type="contour", view = c("x","y"), too.far = 0.1, asp = 1, type = "response", contour.col = "black", n.grid = 100)
+plot(balleny_poly_utm, add = TRUE, col = "grey")
+points(segdata$x[obsdata$Sample.Label], segdata$y[obsdata$Sample.Label], col = "blue", pch = 19)
 
 
-
-
-
-
-
+#plot observed vs fitted
+plot(obs_count, whale.dsm$fitted.values)
 
 
 
