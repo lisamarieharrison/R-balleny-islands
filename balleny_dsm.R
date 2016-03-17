@@ -137,6 +137,22 @@ true_lat_long <- SpatialPoints(na.omit(rev(true_lat_long)), proj4string = CRS("+
 true_lat_long_utm <- spTransform(true_lat_long, CRS("+proj=utm +zone=58 +south +ellps=WGS84"))
 
 
+#---------------------------- ALLOCATE POINTS TO TRANSECTS ----------------------------------#
+
+direction <- gps$Heading
+x <- gps$Longitude
+y <- gps$Latitude
+
+plot(krill$Longitude, krill$Latitude, col = "white")
+text(krill$Longitude, krill$Latitude, c(1:nrow(krill)), cex = 0.5)
+
+krill$transect <- rep(NA, nrow(krill))
+krill$transect[1:55]    <- 1
+krill$transect[56:108]  <- 2
+krill$transect[109:160] <- 3
+krill$transect[161:293] <- 4
+
+
 # --------------------------- CALCULATE PERPENDICULAR DISTANCES -----------------------------#
 
 #distance to closest point on transect (krill cell)
@@ -159,7 +175,7 @@ obs_count[as.numeric(names(table(closest_bin)))] <- table(closest_bin)
 #------------------------------ DENSITY SURFACE MODEL ----------------------------------------#
 
 
-balleny_map <- map("world2Hires", regions=c("Antarctica:Young Island", "Antarctica:Buckle Island", "Antarctica:Sturge Island"))
+balleny_map <- map("world2Hires", regions=c("Antarctica:Young Island", "Antarctica:Buckle Island", "Antarctica:Sturge Island"), plot = FALSE)
 balleny_poly <- map2SpatialPolygons(balleny_map, IDs = balleny_map$names, proj4string=CRS("+proj=longlat +datum=WGS84"))
 balleny_poly_utm <- spTransform(balleny_poly, CRS("+proj=utm +zone=58 +south +ellps=WGS84"))
 
@@ -181,8 +197,8 @@ res <- spTransform(xy, CRS("+proj=utm +zone=58 +south +ellps=WGS84"))
 
 
 
-segdata <- data.frame(cbind(krill$Longitude, krill$Latitude, coordinates(res), krill$Distance_vl, c(1:nrow(krill)), log(krill$arealDen), obs_count))
-colnames(segdata) <- c("longitude", "latitude", "x", "y", "Effort", "Sample.Label", "krill", "number")
+segdata <- data.frame(cbind(krill$Longitude, krill$Latitude, coordinates(res), krill$Distance_vl, krill$transect, c(1:nrow(krill)), log(krill$arealDen), obs_count))
+colnames(segdata) <- c("longitude", "latitude", "x", "y", "Effort", "Transect.Label", "Sample.Label", "krill", "number")
 
 
 obsdata <- data.frame(cbind(c(1:nrow(sighting)), closest_bin, sighting$BestNumber, closest_distance))
