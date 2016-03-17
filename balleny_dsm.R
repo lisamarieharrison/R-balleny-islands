@@ -18,19 +18,15 @@ krill    <- read.csv("Krill.csv", header = T)
 reticle  <- read.csv("reticle.csv", header = T)
 library(chron)
 library(ggplot2)
-library(plotrix) #vectorField
 library(geosphere) #destPoint
 library(maptools) #gcDestination
 library(raster) 
-<<<<<<< HEAD
 library(dsm)
 library(mrds)
-=======
 library(dsm) #density surface model
 library(Distance)
 library(sp)
 library(rgdal)
->>>>>>> 694ba096fb30789b3f3c5650a6751331b8e18f4c
 
 #source required functions
 function_list <- c("gcdHF.R",
@@ -138,12 +134,9 @@ true_lat_long <- data.frame(t(apply(sighting, 1, sightingLatLong, gps = gps)))
 true_lat_long <- SpatialPoints(na.omit(rev(true_lat_long)), proj4string = CRS("+proj=longlat +datum=WGS84"))
 true_lat_long_utm <- spTransform(true_lat_long, CRS("+proj=utm +zone=58 +south +ellps=WGS84"))
 
-<<<<<<< HEAD
 #------------------------------ DENSITY SURFACE MODEL ------------------------------#
-=======
 
 # --------------------------- CALCULATE PERPENDICULAR DISTANCES -----------------------------#
->>>>>>> 694ba096fb30789b3f3c5650a6751331b8e18f4c
 
 #distance to closest point on transect (krill cell)
 sighting$angle_true <- apply(sighting, 1, sightingAngle, gps = gps)
