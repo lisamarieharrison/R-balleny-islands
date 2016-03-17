@@ -18,18 +18,12 @@ krill    <- read.csv("Krill.csv", header = T)
 reticle  <- read.csv("reticle.csv", header = T)
 library(chron)
 library(ggplot2)
-library(Matching) #ks.boot
 library(plotrix) #vectorField
 library(geosphere) #destPoint
-library(pscl) #hurdle
-library(caret) #sensitivity/specificity
-library(flux) #auc
 library(maptools) #gcDestination
 library(raster) 
-library(AER) #dispersiontest
-library(randomForest)
-library(GWmodel)
-library(ape) #Moran.I
+library(dsm) #density surface model
+library(Distance)
 
 #source required functions
 function_list <- c("gcdHF.R",
@@ -133,6 +127,40 @@ sighting$distance <- unlist(apply(sighting, 1, sightingDistance, reticle = retic
 
 sighting$angle_true <- apply(sighting, 1, sightingAngle, gps = gps)
 true_lat_long <- data.frame(t(apply(sighting, 1, sightingLatLong, gps = gps)))
+
+# --------------------------- CALCULATE PERPENDICULAR DISTANCES -----------------------------#
+
+#distance to closest point on transect (krill cell)
+closest_cell <-  NULL
+for (i in 1:nrow(sighting)) {
+  w <- which.min(abs(sighting$datetime[i] - krill$datetime)*24*60)
+  if (abs(sighting$datetime[i] - krill$datetime[w])*24*60 <= 30) {
+    closest_cell[i] <- w
+  }
+}
+
+#------------------------------ DENSITY SURFACE MODEL ----------------------------------------#
+
+#fit detection function
+
+distdata <- data.frame(cbind(c(1:nrow(sighting)), sighting$BestNumber, sighting$distance*1000, rep(1, nrow(sighting)), gps$Latitude[match(sighting$GpsIndex, gps$Index)], gps$Longitude[match(sighting$GpsIndex, gps$Index)]))
+colnames(distdata) <- c("object", "size", "distance", "detected", "latitude", "longitude")
+
+det_function <- ds(distdata, max(distdata$distance), key="hr", adjustment=NULL)
+#det_function_size <-ds(distdata, max(distdata$distance), formula=~as.factor(size), key="hr", adjustment=NULL)
+summary(det_function)
+plot(det_function)
+
+
+dsm.formula <- formula(whales ~ krill + cloud + sea_state + sightability + lat + long)
+
+
+whale.dsm <- dsm(dsm.formula, detfc.hr.null, segdata, obsdata, method="REML")
+
+
+
+
+
 
 
 
