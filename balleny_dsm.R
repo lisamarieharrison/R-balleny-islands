@@ -130,21 +130,28 @@ sighting$distance <- unlist(apply(sighting, 1, sightingDistance, reticle = retic
 sighting$angle_true <- apply(sighting, 1, sightingAngle, gps = gps)
 true_lat_long <- data.frame(t(apply(sighting, 1, sightingLatLong, gps = gps)))
 
+true_lat_long <- SpatialPoints(na.omit(rev(true_lat_long)), proj4string = CRS("+proj=longlat +datum=WGS84"))
+true_lat_long_utm <- spTransform(true_lat_long, CRS("+proj=utm +zone=58 +south +ellps=WGS84"))
+
+
 # --------------------------- CALCULATE PERPENDICULAR DISTANCES -----------------------------#
 
 #distance to closest point on transect (krill cell)
-closest_cell <-  NULL
-for (i in 1:nrow(sighting)) {
-  w <- which.min(abs(sighting$datetime[i] - krill$datetime)*24*60)
-  if (abs(sighting$datetime[i] - krill$datetime[w])*24*60 <= 30) {
-    closest_cell[i] <- w
-  }
-}
+sighting$angle_true <- apply(sighting, 1, sightingAngle, gps = gps)
+true_lat_long <- data.frame(t(apply(sighting, 1, sightingLatLong, gps = gps)))
+distance   <- apply(true_lat_long, 1, FUN = distFromKrill, krill = krill, gps = gps, truePosition = TRUE)
 
+closest_bin <- apply(distance, 2, which.min)
+closest_bin[is.na((closest_bin == Inf))] <- NA
+closest_bin <- unlist(closest_bin)
+closest_distance <- apply(distance, 2, min)*1000
+
+#remove error values
 krill$arealDen[krill$arealDen == 0] <- 0.0001
 
 obs_count <- rep(0, nrow(krill))
-obs_count[as.numeric(names(table(closest_cell)))] <- table(closest_cell)
+obs_count[as.numeric(names(table(closest_bin)))] <- table(closest_bin)
+
 
 #------------------------------ DENSITY SURFACE MODEL ----------------------------------------#
 
@@ -171,26 +178,27 @@ res <- spTransform(xy, CRS("+proj=utm +zone=58 +south +ellps=WGS84"))
 
 
 
-segdata <- data.frame(cbind(krill$Longitude, krill$Latitude, coordinates(res), krill$Distance_vl, c(1:nrow(krill)), log(krill$arealDen)))
-colnames(segdata) <- c("longitude", "latitude", "x", "y", "Effort", "Sample.Label", "krill")
+segdata <- data.frame(cbind(krill$Longitude, krill$Latitude, coordinates(res), krill$Distance_vl, c(1:nrow(krill)), log(krill$arealDen), obs_count))
+colnames(segdata) <- c("longitude", "latitude", "x", "y", "Effort", "Sample.Label", "krill", "number")
 
 
-obsdata <- data.frame(cbind(c(1:nrow(sighting)), closest_cell, sighting$BestNumber, sighting$distance))
+obsdata <- data.frame(cbind(c(1:nrow(sighting)), closest_bin, sighting$BestNumber, closest_distance))
 names(obsdata) <- c("object", "Sample.Label", "size", "distance")
 obsdata <- na.omit(obsdata)
 
 
-whale.dsm <- dsm(formula = count ~ s(x, y) + krill, det_function, segment.data = segdata, observation.data = obsdata, method="REML")
+whale.dsm <- dsm(formula = count ~ s(x, y) + krill, ddf.obj = det_function, family = "poisson", segment.data = segdata, observation.data = obsdata, method="REML")
 summary(whale.dsm)
 
 #plot relative counts over the smooth space
-vis.gam(whale.dsm, plot.type="contour", view = c("x","y"), too.far = 0.1, asp = 1, type = "response", contour.col = "black", n.grid = 100)
+vis.gam(whale.dsm, plot.type="contour", view = c("x","y"), too.far = 0.06, asp = 1, type = "response", contour.col = "black", n.grid = 100)
 plot(balleny_poly_utm, add = TRUE, col = "grey")
-points(segdata$x[obsdata$Sample.Label], segdata$y[obsdata$Sample.Label], col = "blue", pch = 19)
+points(true_lat_long_utm, col = "blue", pch = 19)
 
 
 #plot observed vs fitted
 plot(obs_count, whale.dsm$fitted.values)
+
 
 
 
