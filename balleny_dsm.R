@@ -24,6 +24,8 @@ library(maptools) #gcDestination
 library(raster) 
 library(dsm) #density surface model
 library(Distance)
+library(sp)
+library(rgdal)
 
 #source required functions
 function_list <- c("gcdHF.R",
@@ -152,10 +154,29 @@ summary(det_function)
 plot(det_function)
 
 
+xy <- SpatialPoints(cbind(krill$Longitude, krill$Latitude))
+proj4string(xy) <- CRS("+proj=longlat +datum=WGS84")  ## for example
+res <- spTransform(xy, CRS("+proj=utm +zone=51 ellps=WGS84"))
+
+
+
+segdata <- data.frame(cbind(krill$Longitude, krill$Latitude, coordinates(res), krill$Distance_vl, c(1:nrow(krill))))
+colnames(segdata) <- c("longitude", "latitude", "x", "y", "Effort", "Sample.Label")
+
+
+obsdata <- data.frame(cbind(c(1:nrow(sighting)), closest_cell, sighting$BestNumber, sighting$distance))
+names(obsdata) <- c("object", "Sample.Label", "size", "distance")
+obsdata <- na.omit(obsdata)
+
 dsm.formula <- formula(whales ~ krill + cloud + sea_state + sightability + lat + long)
 
 
-whale.dsm <- dsm(dsm.formula, detfc.hr.null, segdata, obsdata, method="REML")
+whale.dsm <- dsm(formula = count ~ s(x, y), det_function, segment.data = segdata, observation.data = obsdata, method="REML")
+summary(whale.dsm)
+
+
+vis.gam(whale.dsm, plot.type="contour", view = c("x","y"), asp = 1, type = "response", contour.col = "black", 
+        n.grid = 100, xlim = range(segdata$x))
 
 
 
