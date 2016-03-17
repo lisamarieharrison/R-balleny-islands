@@ -20,6 +20,8 @@ library(chron)
 library(ggplot2)
 library(geosphere) #destPoint
 library(maptools) #gcDestination
+library(mapdata)
+library(maps)
 library(raster) 
 library(dsm)
 library(mrds)
@@ -134,7 +136,6 @@ true_lat_long <- data.frame(t(apply(sighting, 1, sightingLatLong, gps = gps)))
 true_lat_long <- SpatialPoints(na.omit(rev(true_lat_long)), proj4string = CRS("+proj=longlat +datum=WGS84"))
 true_lat_long_utm <- spTransform(true_lat_long, CRS("+proj=utm +zone=58 +south +ellps=WGS84"))
 
-#------------------------------ DENSITY SURFACE MODEL ------------------------------#
 
 # --------------------------- CALCULATE PERPENDICULAR DISTANCES -----------------------------#
 
@@ -199,7 +200,7 @@ points(true_lat_long_utm, col = "blue", pch = 19)
 
 
 #plot observed vs fitted
-plot(obs_count, whale.dsm$fitted.values)
+plot(na.omit(segdata)$number, whale.dsm$fitted.values)
 
 
 
