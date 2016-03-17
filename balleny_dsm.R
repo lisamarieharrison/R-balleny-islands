@@ -18,18 +18,12 @@ krill    <- read.csv("Krill.csv", header = T)
 reticle  <- read.csv("reticle.csv", header = T)
 library(chron)
 library(ggplot2)
-library(Matching) #ks.boot
 library(plotrix) #vectorField
 library(geosphere) #destPoint
-library(pscl) #hurdle
-library(caret) #sensitivity/specificity
-library(flux) #auc
 library(maptools) #gcDestination
 library(raster) 
-library(AER) #dispersiontest
-library(randomForest)
-library(GWmodel)
-library(ape) #Moran.I
+library(dsm)
+library(mrds)
 
 #source required functions
 function_list <- c("gcdHF.R",
@@ -135,7 +129,7 @@ sighting$angle_true <- apply(sighting, 1, sightingAngle, gps = gps)
 true_lat_long <- data.frame(t(apply(sighting, 1, sightingLatLong, gps = gps)))
 
 
-
+#------------------------------ DENSITY SURFACE MODEL ------------------------------#
 
 
 
