@@ -22,8 +22,15 @@ library(plotrix) #vectorField
 library(geosphere) #destPoint
 library(maptools) #gcDestination
 library(raster) 
+<<<<<<< HEAD
 library(dsm)
 library(mrds)
+=======
+library(dsm) #density surface model
+library(Distance)
+library(sp)
+library(rgdal)
+>>>>>>> 694ba096fb30789b3f3c5650a6751331b8e18f4c
 
 #source required functions
 function_list <- c("gcdHF.R",
@@ -128,9 +135,78 @@ sighting$distance <- unlist(apply(sighting, 1, sightingDistance, reticle = retic
 sighting$angle_true <- apply(sighting, 1, sightingAngle, gps = gps)
 true_lat_long <- data.frame(t(apply(sighting, 1, sightingLatLong, gps = gps)))
 
+true_lat_long <- SpatialPoints(na.omit(rev(true_lat_long)), proj4string = CRS("+proj=longlat +datum=WGS84"))
+true_lat_long_utm <- spTransform(true_lat_long, CRS("+proj=utm +zone=58 +south +ellps=WGS84"))
 
+<<<<<<< HEAD
 #------------------------------ DENSITY SURFACE MODEL ------------------------------#
+=======
 
+# --------------------------- CALCULATE PERPENDICULAR DISTANCES -----------------------------#
+>>>>>>> 694ba096fb30789b3f3c5650a6751331b8e18f4c
+
+#distance to closest point on transect (krill cell)
+sighting$angle_true <- apply(sighting, 1, sightingAngle, gps = gps)
+true_lat_long <- data.frame(t(apply(sighting, 1, sightingLatLong, gps = gps)))
+distance   <- apply(true_lat_long, 1, FUN = distFromKrill, krill = krill, gps = gps, truePosition = TRUE)
+
+closest_bin <- apply(distance, 2, which.min)
+closest_bin[is.na((closest_bin == Inf))] <- NA
+closest_bin <- unlist(closest_bin)
+closest_distance <- apply(distance, 2, min)*1000
+
+#remove error values
+krill$arealDen[krill$arealDen == 0] <- 0.0001
+
+obs_count <- rep(0, nrow(krill))
+obs_count[as.numeric(names(table(closest_bin)))] <- table(closest_bin)
+
+
+#------------------------------ DENSITY SURFACE MODEL ----------------------------------------#
+
+
+balleny_map <- map("world2Hires", regions=c("Antarctica:Young Island", "Antarctica:Buckle Island", "Antarctica:Sturge Island"))
+balleny_poly <- map2SpatialPolygons(balleny_map, IDs = balleny_map$names, proj4string=CRS("+proj=longlat +datum=WGS84"))
+balleny_poly_utm <- spTransform(balleny_poly, CRS("+proj=utm +zone=58 +south +ellps=WGS84"))
+
+
+#fit detection function
+
+distdata <- data.frame(cbind(c(1:nrow(sighting)), sighting$BestNumber, sighting$distance*1000, rep(1, nrow(sighting)), gps$Latitude[match(sighting$GpsIndex, gps$Index)], gps$Longitude[match(sighting$GpsIndex, gps$Index)]))
+colnames(distdata) <- c("object", "size", "distance", "detected", "latitude", "longitude")
+
+det_function <- ds(distdata, max(distdata$distance), key="hr", adjustment=NULL)
+#det_function_size <-ds(distdata, max(distdata$distance), formula=~as.factor(size), key="hr", adjustment=NULL)
+summary(det_function)
+plot(det_function)
+
+
+xy <- SpatialPoints(cbind(krill$Longitude, krill$Latitude))
+proj4string(xy) <- CRS("+proj=longlat +datum=WGS84")  ## for example
+res <- spTransform(xy, CRS("+proj=utm +zone=58 +south +ellps=WGS84"))
+
+
+
+segdata <- data.frame(cbind(krill$Longitude, krill$Latitude, coordinates(res), krill$Distance_vl, c(1:nrow(krill)), log(krill$arealDen), obs_count))
+colnames(segdata) <- c("longitude", "latitude", "x", "y", "Effort", "Sample.Label", "krill", "number")
+
+
+obsdata <- data.frame(cbind(c(1:nrow(sighting)), closest_bin, sighting$BestNumber, closest_distance))
+names(obsdata) <- c("object", "Sample.Label", "size", "distance")
+obsdata <- na.omit(obsdata)
+
+
+whale.dsm <- dsm(formula = count ~ s(x, y) + krill, ddf.obj = det_function, family = "poisson", segment.data = segdata, observation.data = obsdata, method="REML")
+summary(whale.dsm)
+
+#plot relative counts over the smooth space
+vis.gam(whale.dsm, plot.type="contour", view = c("x","y"), too.far = 0.06, asp = 1, type = "response", contour.col = "black", n.grid = 100)
+plot(balleny_poly_utm, add = TRUE, col = "grey")
+points(true_lat_long_utm, col = "blue", pch = 19)
+
+
+#plot observed vs fitted
+plot(obs_count, whale.dsm$fitted.values)
 
 
 
