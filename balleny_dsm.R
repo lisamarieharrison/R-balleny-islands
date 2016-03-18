@@ -201,7 +201,7 @@ segdata <- data.frame(cbind(krill$Longitude, krill$Latitude, coordinates(res), k
 colnames(segdata) <- c("longitude", "latitude", "x", "y", "Effort", "Transect.Label", "Sample.Label", "krill", "number")
 
 
-obsdata <- data.frame(cbind(c(1:nrow(sighting)), closest_bin, sighting$BestNumber, closest_distance))
+obsdata <- data.frame(cbind(c(1:nrow(sighting)), closest_bin, sighting$BestNumber, sighting$distance*1000))
 names(obsdata) <- c("object", "Sample.Label", "size", "distance")
 obsdata <- na.omit(obsdata)
 
@@ -214,6 +214,7 @@ vis.gam(whale.dsm, plot.type="contour", view = c("x","y"), too.far = 0.06, asp =
 plot(balleny_poly_utm, add = TRUE, col = "grey")
 points(true_lat_long_utm, col = "blue", pch = 19)
 
+#plot count relationship to krill
 
 #plot observed vs fitted
 plot(na.omit(segdata)$number, whale.dsm$fitted.values)
