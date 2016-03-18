@@ -119,6 +119,14 @@ for (i in 2:nrow(gps)) {
   gps$bin_time[i] <- bin_time
 }
 
+#which environmental reading is closest to each krill?
+#each row of krill_env corresponds to a krill reading
+krill_env <- NULL
+for (i in 1:length(krill$datetime)) {
+  
+  krill_env <- rbind(krill_env, env[which.min(abs(as.numeric(krill$datetime[i] - env$datetime)*24)), ])
+  
+}
 
 #------------------------------------ TRUE SIGHTING LOCATION ---------------------------------------#
 
@@ -214,7 +222,6 @@ vis.gam(whale.dsm, plot.type="contour", view = c("x","y"), too.far = 0.06, asp =
 plot(balleny_poly_utm, add = TRUE, col = "grey")
 points(true_lat_long_utm, col = "blue", pch = 19)
 
-#plot count relationship to krill
 
 #plot observed vs fitted
 plot(na.omit(segdata)$number, whale.dsm$fitted.values)
