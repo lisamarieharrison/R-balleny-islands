@@ -29,6 +29,7 @@ library(dsm) #density surface model
 library(Distance)
 library(sp)
 library(rgdal)
+library(plyr) #join
 
 #source required functions
 function_list <- c("gcdHF.R",
@@ -180,7 +181,38 @@ obs_count <- rep(0, nrow(krill))
 obs_count[as.numeric(names(table(closest_bin)))] <- table(closest_bin)
 
 
-#------------------------------ DENSITY SURFACE MODEL ----------------------------------------#
+# ------------------------------ SURVEY AREA POLYGONG -------------------------------- #
+
+#calculate convex hull around points
+ch <- chull(cbind(segdata$x, segdata$y))
+coords <- cbind(segdata$x, segdata$y)[c(ch, ch[1]), ]  # closed polygon
+
+pred.polys <- SpatialPolygons(list(Polygons(list(Polygon(coords)), ID=1)), proj4string = CRS("+proj=utm +zone=58 +south +ellps=WGS84"))
+
+grid <- raster(extent(pred.polys))
+
+# Choose its resolution (m)
+res(grid) <- 5000
+
+# Make the grid have the same coordinate reference system (CRS) as the shapefile.
+proj4string(grid)<-proj4string(pred.polys)
+
+# Transform this raster into a polygon to create grid
+gridpolygon <- rasterToPolygons(grid)
+
+#Intersect with survey area
+survey.grid <- intersect(pred.polys, gridpolygon)
+
+# Plot the intersected shape to see if everything is fine
+plot(survey.grid)
+
+#calculate area of each cell (m)
+grid_cell_area <- (res(grid)[1]/1000)^2
+
+
+
+
+# ----------------------------- DENSITY SURFACE MODEL -------------------------------- #
 
 
 balleny_map <- map("world2Hires", regions=c("Antarctica:Young Island", "Antarctica:Buckle Island", "Antarctica:Sturge Island"), plot = FALSE)
@@ -214,7 +246,7 @@ names(obsdata) <- c("object", "Sample.Label", "size", "distance")
 obsdata <- na.omit(obsdata)
 
 
-whale.dsm <- dsm(formula = count ~ s(x, y) + krill, ddf.obj = det_function, family = "poisson", segment.data = segdata, observation.data = obsdata, method="REML")
+whale.dsm <- dsm(formula = count ~ s(x, y), ddf.obj = det_function, family = "poisson", segment.data = segdata, observation.data = obsdata, method="REML")
 summary(whale.dsm)
 
 #plot relative counts over the smooth space
@@ -228,6 +260,18 @@ plot(na.omit(segdata)$number, whale.dsm$fitted.values)
 #goodness of fit
 gam.check(whale.dsm)
 
+
+# ---------------------------- ABUNDANCE ESTIMATION ---------------------------#
+
+preddata <- data.frame(cbind(coordinates(survey.grid), rep(250, nrow(coordinates(survey.grid))), rep(grid_cell_area, nrow(coordinates(survey.grid)))))
+colnames(preddata) <- c("x", "y", "depth", "area")
+
+
+whale_pred <- predict(whale.dsm, preddata, preddata$area)
+
+
+p <- ggplot() + grid_plot_obj(fill = whale_pred, name = "Abundance", sp = survey.grid) + coord_equal()
+p
 
 
 
