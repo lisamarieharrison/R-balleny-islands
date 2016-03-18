@@ -205,8 +205,8 @@ res <- spTransform(xy, CRS("+proj=utm +zone=58 +south +ellps=WGS84"))
 
 
 
-segdata <- data.frame(cbind(krill$Longitude, krill$Latitude, coordinates(res), krill$Distance_vl, krill$transect, c(1:nrow(krill)), log(krill$arealDen), obs_count))
-colnames(segdata) <- c("longitude", "latitude", "x", "y", "Effort", "Transect.Label", "Sample.Label", "krill", "number")
+segdata <- data.frame(cbind(krill$Longitude, krill$Latitude, coordinates(res), krill$Distance_vl, krill$transect, c(1:nrow(krill)), log(krill$arealDen), obs_count, krill_env$CloudCover, krill_env$SeaState, krill_env$Sightability))
+colnames(segdata) <- c("longitude", "latitude", "x", "y", "Effort", "Transect.Label", "Sample.Label", "krill", "number", "cloud", "sea_state", "sightability")
 
 
 obsdata <- data.frame(cbind(c(1:nrow(sighting)), closest_bin, sighting$BestNumber, sighting$distance*1000))
@@ -222,12 +222,11 @@ vis.gam(whale.dsm, plot.type="contour", view = c("x","y"), too.far = 0.06, asp =
 plot(balleny_poly_utm, add = TRUE, col = "grey")
 points(true_lat_long_utm, col = "blue", pch = 19)
 
-
 #plot observed vs fitted
 plot(na.omit(segdata)$number, whale.dsm$fitted.values)
 
-
-
+#goodness of fit
+gam.check(whale.dsm)
 
 
 
