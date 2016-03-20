@@ -237,7 +237,8 @@ p + scaleBar(lon = 165, lat = -66.3, distanceLon = 5, distanceLat = 2, distanceL
   #geom_point(aes(x = gps$Longitude[gps$Index %in% sighting$GpsIndex], y = gps$Latitude[gps$Index %in% sighting$GpsIndex]), color = "red") + 
   geom_point(data = true_lat_long, aes(x = Longitude, y = Latitude, size = 2), shape = 8, color = "red") + 
   theme_bw() +
-  scale_color_gradient(low="blue", high="yellow", na.value="white")
+  scale_color_gradient(low="blue", high="yellow", na.value="white") + 
+  guides(size = FALSE)
 
 
 #--------------------------- WEIGHTED KRILL DENSITY AROUND EACH SIGHTING -------------------------------#

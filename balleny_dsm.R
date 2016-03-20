@@ -18,14 +18,18 @@ krill    <- read.csv("Krill.csv", header = T)
 reticle  <- read.csv("reticle.csv", header = T)
 library(chron)
 library(ggplot2)
-library(plotrix) #vectorField
 library(geosphere) #destPoint
 library(maptools) #gcDestination
+library(mapdata)
+library(maps)
 library(raster) 
+library(dsm)
+library(mrds)
 library(dsm) #density surface model
 library(Distance)
 library(sp)
 library(rgdal)
+library(plyr) #join
 
 #source required functions
 function_list <- c("gcdHF.R",
@@ -116,6 +120,14 @@ for (i in 2:nrow(gps)) {
   gps$bin_time[i] <- bin_time
 }
 
+#which environmental reading is closest to each krill?
+#each row of krill_env corresponds to a krill reading
+krill_env <- NULL
+for (i in 1:length(krill$datetime)) {
+  
+  krill_env <- rbind(krill_env, env[which.min(abs(as.numeric(krill$datetime[i] - env$datetime)*24)), ])
+  
+}
 
 #------------------------------------ TRUE SIGHTING LOCATION ---------------------------------------#
 
@@ -132,6 +144,22 @@ true_lat_long <- data.frame(t(apply(sighting, 1, sightingLatLong, gps = gps)))
 
 true_lat_long <- SpatialPoints(na.omit(rev(true_lat_long)), proj4string = CRS("+proj=longlat +datum=WGS84"))
 true_lat_long_utm <- spTransform(true_lat_long, CRS("+proj=utm +zone=58 +south +ellps=WGS84"))
+
+
+#---------------------------- ALLOCATE POINTS TO TRANSECTS ----------------------------------#
+
+direction <- gps$Heading
+x <- gps$Longitude
+y <- gps$Latitude
+
+plot(krill$Longitude, krill$Latitude, col = "white")
+text(krill$Longitude, krill$Latitude, c(1:nrow(krill)), cex = 0.5)
+
+krill$transect <- rep(NA, nrow(krill))
+krill$transect[1:55]    <- 1
+krill$transect[56:108]  <- 2
+krill$transect[109:160] <- 3
+krill$transect[161:293] <- 4
 
 
 # --------------------------- CALCULATE PERPENDICULAR DISTANCES -----------------------------#
@@ -153,10 +181,10 @@ obs_count <- rep(0, nrow(krill))
 obs_count[as.numeric(names(table(closest_bin)))] <- table(closest_bin)
 
 
-#------------------------------ DENSITY SURFACE MODEL ----------------------------------------#
+# ----------------------------- DENSITY SURFACE MODEL -------------------------------- #
 
 
-balleny_map <- map("world2Hires", regions=c("Antarctica:Young Island", "Antarctica:Buckle Island", "Antarctica:Sturge Island"))
+balleny_map <- map("world2Hires", regions=c("Antarctica:Young Island", "Antarctica:Buckle Island", "Antarctica:Sturge Island"), plot = FALSE)
 balleny_poly <- map2SpatialPolygons(balleny_map, IDs = balleny_map$names, proj4string=CRS("+proj=longlat +datum=WGS84"))
 balleny_poly_utm <- spTransform(balleny_poly, CRS("+proj=utm +zone=58 +south +ellps=WGS84"))
 
@@ -178,11 +206,11 @@ res <- spTransform(xy, CRS("+proj=utm +zone=58 +south +ellps=WGS84"))
 
 
 
-segdata <- data.frame(cbind(krill$Longitude, krill$Latitude, coordinates(res), krill$Distance_vl, c(1:nrow(krill)), log(krill$arealDen), obs_count))
-colnames(segdata) <- c("longitude", "latitude", "x", "y", "Effort", "Sample.Label", "krill", "number")
+segdata <- data.frame(cbind(krill$Longitude, krill$Latitude, coordinates(res), krill$Distance_vl, krill$transect, c(1:nrow(krill)), log(krill$arealDen), obs_count, krill_env$CloudCover, krill_env$SeaState, krill_env$Sightability))
+colnames(segdata) <- c("longitude", "latitude", "x", "y", "Effort", "Transect.Label", "Sample.Label", "krill", "number", "cloud", "sea_state", "sightability")
 
 
-obsdata <- data.frame(cbind(c(1:nrow(sighting)), closest_bin, sighting$BestNumber, closest_distance))
+obsdata <- data.frame(cbind(c(1:nrow(sighting)), closest_bin, sighting$BestNumber, sighting$distance*1000))
 names(obsdata) <- c("object", "Sample.Label", "size", "distance")
 obsdata <- na.omit(obsdata)
 
@@ -195,12 +223,52 @@ vis.gam(whale.dsm, plot.type="contour", view = c("x","y"), too.far = 0.06, asp =
 plot(balleny_poly_utm, add = TRUE, col = "grey")
 points(true_lat_long_utm, col = "blue", pch = 19)
 
-
 #plot observed vs fitted
 plot(whale.dsm, view = 2)
 
+#goodness of fit
+gam.check(whale.dsm)
 
 
+# ------------------------------ SURVEY AREA POLYGONG -------------------------------- #
+
+#calculate convex hull around points
+ch <- chull(cbind(segdata$x, segdata$y))
+coords <- cbind(segdata$x, segdata$y)[c(ch, ch[1]), ]  # closed polygon
+
+pred.polys <- SpatialPolygons(list(Polygons(list(Polygon(coords)), ID=1)), proj4string = CRS("+proj=utm +zone=58 +south +ellps=WGS84"))
+
+grid <- raster(extent(pred.polys))
+
+# Choose its resolution (m)
+res(grid) <- 10000
+
+# Make the grid have the same coordinate reference system (CRS) as the shapefile.
+proj4string(grid)<-proj4string(pred.polys)
+
+# Transform this raster into a polygon to create grid
+gridpolygon <- rasterToPolygons(grid)
+
+#Intersect with survey area
+survey.grid <- intersect(pred.polys, gridpolygon)
+
+#calculate area of each cell (m)
+grid_cell_area <- (res(grid)[1])^2
+
+#calculate weighted krill around each point
+krill_mean <- apply(coordinates(survey.grid), 1, krillToGrid, threshold = res(grid)[1]/1000)
+
+
+# ---------------------------- ABUNDANCE ESTIMATION ---------------------------#
+
+preddata <- data.frame(cbind(coordinates(survey.grid), rep(grid_cell_area, nrow(coordinates(survey.grid))), krill_mean))
+colnames(preddata) <- c("x", "y", "area", "krill")
+
+whale_pred <- predict(whale.dsm, preddata, preddata$area)
+
+
+p <- ggplot() + grid_plot_obj(fill = whale_pred, name = "Abundance", sp = survey.grid) + coord_equal()
+p
 
 
 
