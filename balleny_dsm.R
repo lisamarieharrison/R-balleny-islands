@@ -197,8 +197,7 @@ points(true_lat_long_utm, col = "blue", pch = 19)
 
 
 #plot observed vs fitted
-plot(obs_count, whale.dsm$fitted.values)
-
+plot(whale.dsm, view = 2)
 
 
 
