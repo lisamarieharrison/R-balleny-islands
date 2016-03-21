@@ -240,7 +240,7 @@ res <- spTransform(xy, CRS("+proj=utm +zone=58 +south +ellps=WGS84"))
 segment.area <- segdata$Effort*13800*2
 
 
-whale.dsm <- dsm(formula = count ~ s(x, y) + krill, ddf.obj = det_function, family = nb, segment.data = segdata, observation.data = obsdata, method="REML", segment.area = segment.area)
+whale.dsm <- dsm(formula = count ~ s(x, y) + krill, ddf.obj = det_function, family = "poisson", segment.data = segdata, observation.data = obsdata, method="REML", segment.area = segment.area)
 summary(whale.dsm)
 
 #plot relative counts over the smooth space
@@ -295,6 +295,27 @@ sum(na.omit(whale_pred))
 
 p <- ggplot() + grid_plot_obj(fill = whale_pred, name = "Abundance", sp = survey.grid)
 p
+
+
+# -------------------------- VARIANCE ESTIMATION ---------------------------#
+
+#dsm.var.prop can't handle NA values in preddata so need to na.omit and keep track of data location with prediction.points
+preddata_na <- na.omit(preddata)
+prediction_points <- which(rowSums(is.na(preddata)) == 0)
+
+preddata.varprop <- split(preddata_na, 1:nrow(preddata_na))
+dsm.xy.varprop <- dsm.var.prop(whale.dsm, pred.data = preddata.varprop, off.set = preddata$area[1])
+
+pred_var <- rep(NA, nrow(preddata))
+pred_var[prediction_points] <- dsm.xy.varprop$pred.var
+
+pred <- rep(NA, nrow(preddata))
+pred[prediction_points] <- dsm.xy.varprop$pred
+
+p <- ggplot() + grid_plot_obj(sqrt(pred_var)/unlist(pred), "CV", sp = survey.grid) 
+p
+
+
 
 
 
