@@ -207,6 +207,7 @@ colnames(distdata) <- c("object", "size", "distance", "detected", "latitude", "l
 
 obsdata  <- na.omit(obsdata)
 distdata <- na.omit(distdata)
+segdata  <- na.omit(segdata)
 
 #for ds function
 region.table <- segdata[6]
@@ -222,7 +223,7 @@ names(obs.table) <- c("object", "Sample.Label", "Region.Label")
 
 #using ds
 det_function <- ds(data = distdata, truncation = max(distdata$distance), key="hr", adjustment=NULL, sample.table = sample.table, region.table = region.table, obs.table = obs.table)
-det_function_size <- ds(distdata, max(distdata$distance), formula=~size, key="hr", adjustment=NULL)
+det_function_size <- ds(distdata, max(distdata$distance), formula=~size, key="hr", adjustment=NULL, sample.table = sample.table, region.table = region.table, obs.table = obs.table)
 summary(det_function_size)
 plot(det_function)
 
@@ -238,7 +239,7 @@ res <- spTransform(xy, CRS("+proj=utm +zone=58 +south +ellps=WGS84"))
 #calculate area of each segment using length of segment
 segment.area <- segdata$Effort*13800*2
 
-whale.dsm <- dsm(formula = D ~ s(x, y) + krill, ddf.obj = det_function, family = nb, segment.data = segdata, observation.data = obsdata, method="REML", segment.area = segment.area)
+whale.dsm <- dsm(formula = abundance.est ~ s(x, y) + krill, ddf.obj = det_function_size, family = tw(), segment.data = segdata, observation.data = obsdata, method="REML", segment.area = segment.area)
 summary(whale.dsm)
 
 #plot relative counts over the smooth space
@@ -249,8 +250,12 @@ points(true_lat_long_utm, col = "blue", pch = 19)
 #goodness of fit
 gam.check(whale.dsm)
 
-#check overdispersion
+#check overdispersion if poisson glm
 dispersiontest(whale.dsm, alternative ="greater")
+
+#check spatial autocorrelation
+dsm.cor(whale.dsm, max.lag = 10, Segment.Label="Sample.Label", Transect.Label = "Transect.Label")
+
 
 # ------------------------------ SURVEY AREA POLYGON -------------------------------- #
 
@@ -327,9 +332,10 @@ if (all.vars(whale.dsm$formula)[1] == "D") {
   } else {
   
   #if abundance model, predict abundance in each cell
-  dsm.xy.varprop <- dsm.var.prop(whale.dsm, pred.data = preddata.varprop, off.set = preddata$area)
+  dsm.xy.varprop <- dsm.var.prop(whale.dsm, pred.data = preddata.varprop, off.set = preddata_na$area)
   
 }
+
 
 pred_var <- rep(NA, nrow(preddata))
 pred_var[prediction_points] <- dsm.xy.varprop$pred.var
@@ -340,8 +346,6 @@ pred[prediction_points] <- dsm.xy.varprop$pred
 p <- ggplot() + grid_plot_obj(sqrt(pred_var)/unlist(pred), "CV", sp = survey.grid) +
   geom_polygon(data=balleny_ggplot, aes(x=long, y=lat, group=id), color="black", fill = "grey")
 p
-
-
 
 
 
