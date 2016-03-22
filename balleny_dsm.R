@@ -30,6 +30,8 @@ library(Distance)
 library(sp)
 library(rgdal)
 library(plyr) #join
+library(AER) #dispersiontest
+library(rgeos) #gArea
 
 #source required functions
 function_list <- c("gcdHF.R",
@@ -185,14 +187,12 @@ obs_count[as.numeric(names(table(closest_bin)))] <- table(closest_bin)
 
 # ----------------------------- DENSITY SURFACE MODEL -------------------------------- #
 
-
-balleny_map <- map("world2Hires", regions=c("Antarctica:Young Island", "Antarctica:Buckle Island", "Antarctica:Sturge Island"), plot = FALSE)
+balleny_map  <- map("world2Hires", regions=c("Antarctica:Young Island", "Antarctica:Buckle Island", "Antarctica:Sturge Island"), plot = FALSE)
 balleny_poly <- map2SpatialPolygons(balleny_map, IDs = balleny_map$names, proj4string=CRS("+proj=longlat +datum=WGS84"))
 balleny_poly_utm <- spTransform(balleny_poly, CRS("+proj=utm +zone=58 +south +ellps=WGS84"))
-
+balleny_ggplot   <- fortify(balleny_poly_utm, region="id") #df for ggplot
 
 #fit detection function
-
 
 segdata <- data.frame(cbind(krill$Longitude, krill$Latitude, coordinates(res), krill$Distance_vl, krill$transect, c(1:nrow(krill)), log(krill$arealDen), obs_count, krill_env$CloudCover, krill_env$SeaState, krill_env$Sightability))
 colnames(segdata) <- c("longitude", "latitude", "x", "y", "Effort", "Transect.Label", "Sample.Label", "krill", "number", "cloud", "sea_state", "sightability")
@@ -238,7 +238,7 @@ res <- spTransform(xy, CRS("+proj=utm +zone=58 +south +ellps=WGS84"))
 #calculate area of each segment using length of segment
 segment.area <- segdata$Effort*13800*2
 
-whale.dsm <- dsm(formula = D ~ s(x, y) + krill, ddf.obj = det_function, family = tw(), segment.data = segdata, observation.data = obsdata, method="REML", segment.area = segment.area)
+whale.dsm <- dsm(formula = D ~ s(x, y) + krill, ddf.obj = det_function, family = nb, segment.data = segdata, observation.data = obsdata, method="REML", segment.area = segment.area)
 summary(whale.dsm)
 
 #plot relative counts over the smooth space
@@ -284,17 +284,28 @@ survey_area <- gArea(pred.polys) #area in m2
 
 # ---------------------------- ABUNDANCE ESTIMATION ---------------------------#
 
+#data frame of prediction locations
 preddata <- data.frame(cbind(coordinates(survey.grid), rep(grid_cell_area, nrow(coordinates(survey.grid))), krill_mean))
 colnames(preddata) <- c("x", "y", "area", "krill")
 
-whale_pred <- c(predict(whale.dsm, preddata, off.set = preddata$area))
+#calculate predicted values
+if (all.vars(whale.dsm$formula)[1] == "D") {
+  
+  #if density model, predict densities in whales/km^2
+  whale_pred <- c(predict(whale.dsm, preddata, off.set = 0))/1e-6
+  total_individuals <- mean(na.omit(whale_pred))*survey_area*1e-6
+  
+} else {
+  
+  #if abundance model, predict abundance in each cell
+  whale_pred <- c(predict(whale.dsm, preddata, off.set = preddata$area))
+  total_individuals <- sum(na.omit(whale_pred))
+  
+}
 
-#calculate total individuals in survey area
-sum(na.omit(whale_pred))
-
-p <- ggplot() + grid_plot_obj(fill = whale_pred, name = "Abundance", sp = survey.grid)
+p <- ggplot() + grid_plot_obj(fill = whale_pred, name = all.vars(whale.dsm$formula)[1], sp = survey.grid) +
+  geom_polygon(data=balleny_ggplot, aes(x=long, y=lat, group=id), color="black", fill = "grey")
 p
-
 
 # -------------------------- VARIANCE ESTIMATION ---------------------------#
 
