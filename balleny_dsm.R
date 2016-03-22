@@ -268,6 +268,10 @@ res(grid) <- 10000
 # Make the grid have the same coordinate reference system (CRS) as the shapefile.
 proj4string(grid)<-proj4string(pred.polys)
 
+#get percentage of cells overlapped by islands
+overlap_poly <- getValues(rasterize(balleny_poly_utm, grid, getCover = TRUE))
+grid <- setValues(grid, overlap_poly)
+
 # Transform this raster into a polygon to create grid
 gridpolygon <- rasterToPolygons(grid)
 
@@ -275,17 +279,18 @@ gridpolygon <- rasterToPolygons(grid)
 survey.grid <- intersect(pred.polys, gridpolygon)
 
 #calculate area of each cell (m)
-grid_cell_area <- (res(grid)[1])^2
+grid_cell_area <- rep((res(grid)[1])^2, nrow(coordinates(survey.grid)))*(1-survey.grid$layer/100)
 
 #calculate weighted krill around each point
 krill_mean <- apply(coordinates(survey.grid), 1, krillToGrid, threshold = res(grid)[1]/1000, krill_mat = segdata)
 
-survey_area <- gArea(pred.polys) #area in m2
+survey_area <- gArea(pred.polys) - gArea(balleny_poly_utm) #area in m2 minus island area
+
 
 # ---------------------------- ABUNDANCE ESTIMATION ---------------------------#
 
 #data frame of prediction locations
-preddata <- data.frame(cbind(coordinates(survey.grid), rep(grid_cell_area, nrow(coordinates(survey.grid))), krill_mean))
+preddata <- data.frame(cbind(coordinates(survey.grid), grid_cell_area, krill_mean))
 colnames(preddata) <- c("x", "y", "area", "krill")
 
 #calculate predicted values
@@ -312,9 +317,19 @@ p
 #dsm.var.prop can't handle NA values in preddata so need to na.omit and keep track of data location with prediction.points
 preddata_na <- na.omit(preddata)
 prediction_points <- which(rowSums(is.na(preddata)) == 0)
-
 preddata.varprop <- split(preddata_na, 1:nrow(preddata_na))
-dsm.xy.varprop <- dsm.var.prop(whale.dsm, pred.data = preddata.varprop, off.set = preddata$area[1])
+
+if (all.vars(whale.dsm$formula)[1] == "D") {
+  
+  #if density model, predict densities in whales/km^2
+  dsm.xy.varprop <- dsm.var.prop(whale.dsm, pred.data = preddata.varprop, off.set = 0)
+  
+  } else {
+  
+  #if abundance model, predict abundance in each cell
+  dsm.xy.varprop <- dsm.var.prop(whale.dsm, pred.data = preddata.varprop, off.set = preddata$area)
+  
+}
 
 pred_var <- rep(NA, nrow(preddata))
 pred_var[prediction_points] <- dsm.xy.varprop$pred.var
@@ -322,7 +337,8 @@ pred_var[prediction_points] <- dsm.xy.varprop$pred.var
 pred <- rep(NA, nrow(preddata))
 pred[prediction_points] <- dsm.xy.varprop$pred
 
-p <- ggplot() + grid_plot_obj(sqrt(pred_var)/unlist(pred), "CV", sp = survey.grid)
+p <- ggplot() + grid_plot_obj(sqrt(pred_var)/unlist(pred), "CV", sp = survey.grid) +
+  geom_polygon(data=balleny_ggplot, aes(x=long, y=lat, group=id), color="black", fill = "grey")
 p
 
 
