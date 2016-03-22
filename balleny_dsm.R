@@ -197,22 +197,21 @@ balleny_poly_utm <- spTransform(balleny_poly, CRS("+proj=utm +zone=58 +south +el
 segdata <- data.frame(cbind(krill$Longitude, krill$Latitude, coordinates(res), krill$Distance_vl, krill$transect, c(1:nrow(krill)), log(krill$arealDen), obs_count, krill_env$CloudCover, krill_env$SeaState, krill_env$Sightability))
 colnames(segdata) <- c("longitude", "latitude", "x", "y", "Effort", "Transect.Label", "Sample.Label", "krill", "number", "cloud", "sea_state", "sightability")
 
-
 obsdata <- data.frame(cbind(c(1:nrow(sighting)), closest_bin, segdata$Transect.Label[closest_bin], sighting$BestNumber, sighting$distance*1000))
 names(obsdata) <- c("object", "Sample.Label", "Transect.Label", "size", "distance")
-obsdata <- na.omit(obsdata)
 
+distdata <- data.frame(cbind(c(1:nrow(sighting)), sighting$BestNumber, sighting$distance*1000, rep(1, nrow(sighting)), 
+            gps$Latitude[match(sighting$GpsIndex, gps$Index)], gps$Longitude[match(sighting$GpsIndex, gps$Index)], 
+            obsdata$Sample.Label, obsdata$Transect.Label, krill_env$SeaState[closest_bin], krill_env$SeaState[closest_bin]))
+colnames(distdata) <- c("object", "size", "distance", "detected", "latitude", "longitude", "Sample.Label", "Transect.Label", "sea_state", "cloud")
 
-distdata <- data.frame(cbind(c(1:nrow(sighting)), sighting$BestNumber, sighting$distance*1000, rep(1, nrow(sighting)), gps$Latitude[match(sighting$GpsIndex, gps$Index)], gps$Longitude[match(sighting$GpsIndex, gps$Index)]))
-colnames(distdata) <- c("object", "size", "distance", "detected", "latitude", "longitude")
+obsdata  <- na.omit(obsdata)
 distdata <- na.omit(distdata)
-distdata$Sample.Label <- obsdata$Sample.Label
-distdata$Transect.Label <- obsdata$Transect.Label
-distdata$sea_state <- na.omit(krill_env$SeaState[closest_bin])
 
+#for ds function
 region.table <- segdata[6]
 region.table$Area <- segdata$Effort*13800
-region.table <- aggregate(region.table$Area, by = list(region.table$Region.Label), FUN = "sum")
+region.table <- aggregate(region.table$Area, by = list(region.table$Transect.Label), FUN = "sum")
 names(region.table) <- c("Region.Label", "Area")
 
 sample.table <- segdata[5:7]
@@ -229,18 +228,17 @@ plot(det_function)
 
 #using mrds
 #det_function <- ddf(method = 'ds',dsmodel =~ cds(key = "hr", formula=~1), 
- #               data = distdata, meta.data = list(width = 13800))
+#               data = distdata, meta.data = list(width = 13800))
 #summary(det_function)
 #plot(det_function)
 
-xy <- SpatialPoints(cbind(krill$Longitude, krill$Latitude))
-proj4string(xy) <- CRS("+proj=longlat +datum=WGS84")  ## for example
+xy <- SpatialPoints(cbind(krill$Longitude, krill$Latitude), proj4string = CRS("+proj=longlat +datum=WGS84"))
 res <- spTransform(xy, CRS("+proj=utm +zone=58 +south +ellps=WGS84"))
 
+#calculate area of each segment using length of segment
 segment.area <- segdata$Effort*13800*2
 
-
-whale.dsm <- dsm(formula = count ~ s(x, y) + krill, ddf.obj = det_function, family = "poisson", segment.data = segdata, observation.data = obsdata, method="REML", segment.area = segment.area)
+whale.dsm <- dsm(formula = D ~ s(x, y) + krill, ddf.obj = det_function, family = tw(), segment.data = segdata, observation.data = obsdata, method="REML", segment.area = segment.area)
 summary(whale.dsm)
 
 #plot relative counts over the smooth space
@@ -282,13 +280,14 @@ grid_cell_area <- (res(grid)[1])^2
 #calculate weighted krill around each point
 krill_mean <- apply(coordinates(survey.grid), 1, krillToGrid, threshold = res(grid)[1]/1000, krill_mat = segdata)
 
+survey_area <- gArea(pred.polys) #area in m2
 
 # ---------------------------- ABUNDANCE ESTIMATION ---------------------------#
 
 preddata <- data.frame(cbind(coordinates(survey.grid), rep(grid_cell_area, nrow(coordinates(survey.grid))), krill_mean))
 colnames(preddata) <- c("x", "y", "area", "krill")
 
-whale_pred <- c(predict(whale.dsm, preddata, preddata$area))
+whale_pred <- c(predict(whale.dsm, preddata, off.set = preddata$area))
 
 #calculate total individuals in survey area
 sum(na.omit(whale_pred))
@@ -312,7 +311,7 @@ pred_var[prediction_points] <- dsm.xy.varprop$pred.var
 pred <- rep(NA, nrow(preddata))
 pred[prediction_points] <- dsm.xy.varprop$pred
 
-p <- ggplot() + grid_plot_obj(sqrt(pred_var)/unlist(pred), "CV", sp = survey.grid) 
+p <- ggplot() + grid_plot_obj(sqrt(pred_var)/unlist(pred), "CV", sp = survey.grid)
 p
 
 
