@@ -52,7 +52,9 @@ function_list <- c("gcdHF.R",
                    "krillWeightedAverage.R",
                    "countIndividalsAroundKrill.R",
                    "removeRasterOverlap.R",
-                   "dfFromRaster.R"
+                   "dfFromRaster.R",
+                   "krillToGrid.R",
+                   "grid_plot_obj.R"
 )
 
 for (f in function_list) {
@@ -187,14 +189,32 @@ obs_count[as.numeric(names(table(closest_bin)))] <- table(closest_bin)
 
 # ----------------------------- DENSITY SURFACE MODEL -------------------------------- #
 
-balleny_map  <- map("world2Hires", regions=c("Antarctica:Young Island", "Antarctica:Buckle Island", "Antarctica:Sturge Island"), plot = FALSE)
-balleny_poly <- map2SpatialPolygons(balleny_map, IDs = balleny_map$names, proj4string=CRS("+proj=longlat +datum=WGS84"))
+b1 <- read.csv("C:/Users/43439535/Documents/Balleny_1.csv", header = F)
+x <- unlist(b1[seq(1, length(b1), by = 3)])
+y <- unlist(b1[seq(2, length(b1), by = 3)])
+b1_poly <- Polygon(cbind(x, y), hole = FALSE)
+
+b2 <- read.csv("C:/Users/43439535/Documents/Balleny_2.csv", header = F)
+x <- unlist(b2[seq(1, length(b2), by = 3)])
+y <- unlist(b2[seq(2, length(b2), by = 3)])
+b2_poly <- Polygon(cbind(x, y), hole = FALSE)
+
+b3 <- read.csv("C:/Users/43439535/Documents/Balleny_3.csv", header = F)
+x <- unlist(b3[seq(1, length(b3), by = 3)])
+y <- unlist(b3[seq(2, length(b3), by = 3)])
+b3_poly <- Polygon(cbind(x, y), hole = FALSE)
+
+balleny_poly <- SpatialPolygons(list(Polygons(list(b1_poly), ID = 1), Polygons(list(b2_poly), ID = 2), Polygons(list(b3_poly), ID = 3)), proj4string = CRS("+proj=longlat +datum=WGS84"))
 balleny_poly_utm <- spTransform(balleny_poly, CRS("+proj=utm +zone=58 +south +ellps=WGS84"))
 balleny_ggplot   <- fortify(balleny_poly_utm, region="id") #df for ggplot
 
+dat_loc <- SpatialPoints(cbind(krill$Longitude, krill$Latitude), proj4string = CRS("+proj=longlat +datum=WGS84"))
+dat_loc_utm <- spTransform(dat_loc, CRS("+proj=utm +zone=58 +south +ellps=WGS84"))
+
+
 #fit detection function
 
-segdata <- data.frame(cbind(krill$Longitude, krill$Latitude, coordinates(res), krill$Distance_vl, krill$transect, c(1:nrow(krill)), log(krill$arealDen), obs_count, krill_env$CloudCover, krill_env$SeaState, krill_env$Sightability))
+segdata <- data.frame(cbind(krill$Longitude, krill$Latitude, coordinates(dat_loc_utm), krill$Distance_vl, krill$transect, c(1:nrow(krill)), log(krill$arealDen), obs_count, krill_env$CloudCover, krill_env$SeaState, krill_env$Sightability))
 colnames(segdata) <- c("longitude", "latitude", "x", "y", "Effort", "Transect.Label", "Sample.Label", "krill", "number", "cloud", "sea_state", "sightability")
 
 obsdata <- data.frame(cbind(c(1:nrow(sighting)), closest_bin, segdata$Transect.Label[closest_bin], sighting$BestNumber, sighting$distance*1000))
@@ -223,7 +243,7 @@ names(obs.table) <- c("object", "Sample.Label", "Region.Label")
 
 #using ds
 det_function <- ds(data = distdata, truncation = max(distdata$distance), key="hr", adjustment=NULL, sample.table = sample.table, region.table = region.table, obs.table = obs.table)
-det_function_size <- ds(distdata, max(distdata$distance), formula=~size, key="hr", adjustment=NULL, sample.table = sample.table, region.table = region.table, obs.table = obs.table)
+det_function_size <- ds(distdata, max(distdata$distance), formula=~size + cloud, key="hr", adjustment=NULL, sample.table = sample.table, region.table = region.table, obs.table = obs.table)
 summary(det_function_size)
 plot(det_function)
 
@@ -239,7 +259,7 @@ res <- spTransform(xy, CRS("+proj=utm +zone=58 +south +ellps=WGS84"))
 #calculate area of each segment using length of segment
 segment.area <- segdata$Effort*13800*2
 
-whale.dsm <- dsm(formula = abundance.est ~ s(x, y) + krill, ddf.obj = det_function_size, family = tw(), segment.data = segdata, observation.data = obsdata, method="REML", segment.area = segment.area)
+whale.dsm <- dsm(formula = count ~ s(x, y, k = 10) + krill, family = nb, ddf.obj = det_function, segment.data = segdata, observation.data = obsdata, method="REML", segment.area = segment.area)
 summary(whale.dsm)
 
 #plot relative counts over the smooth space
@@ -254,7 +274,10 @@ gam.check(whale.dsm)
 dispersiontest(whale.dsm, alternative ="greater")
 
 #check spatial autocorrelation
-dsm.cor(whale.dsm, max.lag = 10, Segment.Label="Sample.Label", Transect.Label = "Transect.Label")
+dsm.cor(whale.dsm, max.lag = 10, Segment.Label="Sample.Label")
+
+#AIC check
+pchisq(493.1144 -  491.9856, 1, lower.tail=FALSE)
 
 
 # ------------------------------ SURVEY AREA POLYGON -------------------------------- #
@@ -290,6 +313,54 @@ grid_cell_area <- rep((res(grid)[1])^2, nrow(coordinates(survey.grid)))*(1-surve
 krill_mean <- apply(coordinates(survey.grid), 1, krillToGrid, threshold = res(grid)[1]/1000, krill_mat = segdata)
 
 survey_area <- gArea(pred.polys) - gArea(balleny_poly_utm) #area in m2 minus island area
+
+# ------------------------------ SOAP FILM SMOOTHER ---------------------------- #
+
+
+#soap smoother to remove island
+island.hole <- gDifference(survey.grid, balleny_poly_utm)
+island.grid <- intersect(island.hole, gridpolygon)
+knot_points <- list(x = coordinates(island.grid)[, 1], y= coordinates(island.grid)[, 2])
+soap.knots  <- make.soapgrid(knot_points, c(10, 10))
+
+#increase survey area by 10km
+
+grid <- raster(extent(gBuffer(survey.grid, width = 10000)))
+# Choose its resolution (m)
+res(grid) <- 10000
+
+# Make the grid have the same coordinate reference system (CRS) as the shapefile.
+proj4string(grid)<-proj4string(gBuffer(survey.grid, width = 10000))
+
+#get percentage of cells overlapped by islands
+overlap_poly <- getValues(rasterize(balleny_poly_utm, grid, getCover = TRUE))
+grid <- setValues(grid, overlap_poly)
+
+# Transform this raster into a polygon to create grid
+gridpolygon <- rasterToPolygons(grid)
+
+survey.grid.large <- intersect(gBuffer(survey.grid, width = 10000), gridpolygon)
+
+#remove boundary points
+ch <- chull(coordinates(survey.grid.large))
+coords <- coordinates(survey.grid.large)[c(ch, ch[1]), ] 
+
+whale.dsm <- dsm(D ~ s(x, y, bs="so", k = 5, xt=list(bnd=list(xy.coords(coords)))) + krill, family = tw(), ddf.obj = det_function_size, 
+                 segment.data = segdata, observation.data = obsdata, method="REML", segment.area = segdata$Effort*13800*2, 
+                 knots = soap.knots)
+summary(whale.dsm)
+
+
+#plot relative counts over the smooth space
+vis.gam(whale.dsm, plot.type="contour", view = c("x","y"), too.far = 0.06, asp = 1, type = "response", contour.col = "black", n.grid = 100)
+plot(balleny_poly_utm, add = TRUE, col = "grey")
+points(true_lat_long_utm, col = "blue", pch = 19)
+
+#goodness of fit
+gam.check(whale.dsm)
+
+#check spatial autocorrelation
+dsm.cor(whale.dsm, max.lag = 10, Segment.Label="Sample.Label")
 
 
 # ---------------------------- ABUNDANCE ESTIMATION ---------------------------#
@@ -346,6 +417,7 @@ pred[prediction_points] <- dsm.xy.varprop$pred
 p <- ggplot() + grid_plot_obj(sqrt(pred_var)/unlist(pred), "CV", sp = survey.grid) +
   geom_polygon(data=balleny_ggplot, aes(x=long, y=lat, group=id), color="black", fill = "grey")
 p
+
 
 
 
