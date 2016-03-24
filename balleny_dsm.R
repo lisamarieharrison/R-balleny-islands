@@ -82,7 +82,7 @@ sighting    <- subset(sighting, sighting$datetime >= min(krill$datetime) & sight
 gps         <- subset(gps, gps$datetime >= min(krill$datetime) & gps$datetime <= max(krill$datetime))
 effort      <- subset(effort, effort$datetime >= min(krill$datetime) & effort$datetime <= max(krill$datetime))
 
-#effort where MI observers present
+#effort where MI observers pdat_loc_utment
 #next zero cell included to give total time on effort
 #doesn't include changes in observers or half effort
 effort$NObserversM[effort$NObserversM == 1 | effort$EffortStatus == "OF"] <- 0 #to count half effort as off effort
@@ -125,7 +125,7 @@ for (i in 2:nrow(gps)) {
 }
 
 #which environmental reading is closest to each krill?
-#each row of krill_env corresponds to a krill reading
+#each row of krill_env cordat_loc_utmponds to a krill reading
 krill_env <- NULL
 for (i in 1:length(krill$datetime)) {
   
@@ -189,26 +189,22 @@ obs_count[as.numeric(names(table(closest_bin)))] <- table(closest_bin)
 
 # ----------------------------- DENSITY SURFACE MODEL -------------------------------- #
 
-b1 <- read.csv("C:/Users/43439535/Documents/Balleny_1.csv", header = F)
-x <- unlist(b1[seq(1, length(b1), by = 3)])
-y <- unlist(b1[seq(2, length(b1), by = 3)])
-b1_poly <- Polygon(cbind(x, y), hole = FALSE)
+#read csv file of coordinates for each island
+for (i in 1:3) {
+  
+  b <- read.csv(paste("C:/Users/43439535/Documents/Lisa/phd/Balleny Islands/polygons/Balleny_", i, ".csv", sep = ""), header = F)
+  x <- unlist(b[seq(1, length(b), by = 3)])
+  y <- unlist(b[seq(2, length(b), by = 3)])
+  assign(paste("b", i, "_poly", sep = ""), Polygon(cbind(x, y), hole = FALSE))
+  
+}
 
-b2 <- read.csv("C:/Users/43439535/Documents/Balleny_2.csv", header = F)
-x <- unlist(b2[seq(1, length(b2), by = 3)])
-y <- unlist(b2[seq(2, length(b2), by = 3)])
-b2_poly <- Polygon(cbind(x, y), hole = FALSE)
-
-b3 <- read.csv("C:/Users/43439535/Documents/Balleny_3.csv", header = F)
-x <- unlist(b3[seq(1, length(b3), by = 3)])
-y <- unlist(b3[seq(2, length(b3), by = 3)])
-b3_poly <- Polygon(cbind(x, y), hole = FALSE)
-
-balleny_poly <- SpatialPolygons(list(Polygons(list(b1_poly), ID = 1), Polygons(list(b2_poly), ID = 2), Polygons(list(b3_poly), ID = 3)), proj4string = CRS("+proj=longlat +datum=WGS84"))
+balleny_poly     <- SpatialPolygons(list(Polygons(list(b1_poly), ID = 1), Polygons(list(b2_poly), ID = 2), Polygons(list(b3_poly), ID = 3)), proj4string = CRS("+proj=longlat +datum=WGS84"))
 balleny_poly_utm <- spTransform(balleny_poly, CRS("+proj=utm +zone=58 +south +ellps=WGS84"))
 balleny_ggplot   <- fortify(balleny_poly_utm, region="id") #df for ggplot
 
-dat_loc <- SpatialPoints(cbind(krill$Longitude, krill$Latitude), proj4string = CRS("+proj=longlat +datum=WGS84"))
+#convert data locations to spatial points
+dat_loc     <- SpatialPoints(cbind(krill$Longitude, krill$Latitude), proj4string = CRS("+proj=longlat +datum=WGS84"))
 dat_loc_utm <- spTransform(dat_loc, CRS("+proj=utm +zone=58 +south +ellps=WGS84"))
 
 
@@ -253,9 +249,6 @@ plot(det_function)
 #summary(det_function)
 #plot(det_function)
 
-xy <- SpatialPoints(cbind(krill$Longitude, krill$Latitude), proj4string = CRS("+proj=longlat +datum=WGS84"))
-res <- spTransform(xy, CRS("+proj=utm +zone=58 +south +ellps=WGS84"))
-
 #calculate area of each segment using length of segment
 segment.area <- segdata$Effort*13800*2
 
@@ -263,7 +256,7 @@ whale.dsm <- dsm(formula = count ~ s(x, y, k = 10) + krill, family = nb, ddf.obj
 summary(whale.dsm)
 
 #plot relative counts over the smooth space
-vis.gam(whale.dsm, plot.type="contour", view = c("x","y"), too.far = 0.06, asp = 1, type = "response", contour.col = "black", n.grid = 100)
+vis.gam(whale.dsm, plot.type="contour", view = c("x","y"), too.far = 0.06, asp = 1, type = "dat_loc_utmponse", contour.col = "black", n.grid = 100)
 plot(balleny_poly_utm, add = TRUE, col = "grey")
 points(true_lat_long_utm, col = "blue", pch = 19)
 
@@ -290,11 +283,11 @@ pred.polys <- SpatialPolygons(list(Polygons(list(Polygon(coords)), ID=1)), proj4
 
 grid <- raster(extent(pred.polys))
 
-# Choose its resolution (m)
+# Choose its dat_loc_utmolution (m)
 res(grid) <- 10000
 
 # Make the grid have the same coordinate reference system (CRS) as the shapefile.
-proj4string(grid)<-proj4string(pred.polys)
+proj4string(grid) <- proj4string(pred.polys)
 
 #get percentage of cells overlapped by islands
 overlap_poly <- getValues(rasterize(balleny_poly_utm, grid, getCover = TRUE))
@@ -307,10 +300,10 @@ gridpolygon <- rasterToPolygons(grid)
 survey.grid <- intersect(pred.polys, gridpolygon)
 
 #calculate area of each cell (m)
-grid_cell_area <- rep((res(grid)[1])^2, nrow(coordinates(survey.grid)))*(1-survey.grid$layer/100)
+grid_cell_area <- rep((dat_loc_utm(grid)[1])^2, nrow(coordinates(survey.grid)))*(1-survey.grid$layer/100)
 
 #calculate weighted krill around each point
-krill_mean <- apply(coordinates(survey.grid), 1, krillToGrid, threshold = res(grid)[1]/1000, krill_mat = segdata)
+krill_mean <- apply(coordinates(survey.grid), 1, krillToGrid, thdat_loc_utmhold = dat_loc_utm(grid)[1]/1000, krill_mat = segdata)
 
 survey_area <- gArea(pred.polys) - gArea(balleny_poly_utm) #area in m2 minus island area
 
@@ -326,7 +319,7 @@ soap.knots  <- make.soapgrid(knot_points, c(10, 10))
 #increase survey area by 10km
 
 grid <- raster(extent(gBuffer(survey.grid, width = 10000)))
-# Choose its resolution (m)
+# Choose its dat_loc_utmolution (m)
 res(grid) <- 10000
 
 # Make the grid have the same coordinate reference system (CRS) as the shapefile.
@@ -345,14 +338,18 @@ survey.grid.large <- intersect(gBuffer(survey.grid, width = 10000), gridpolygon)
 ch <- chull(coordinates(survey.grid.large))
 coords <- coordinates(survey.grid.large)[c(ch, ch[1]), ] 
 
-whale.dsm <- dsm(D ~ s(x, y, bs="so", k = 5, xt=list(bnd=list(xy.coords(coords)))) + krill, family = tw(), ddf.obj = det_function_size, 
+
+#bnd is list of islands boundaries (survey area and 3 islands) which can't overlaps
+bnd <- list(xy.coords(coords))
+
+whale.dsm <- dsm(D ~ s(x, y, bs="so", k = 5, xt=list(bnd=bnd)) + krill, family = tw(), ddf.obj = det_function_size, 
                  segment.data = segdata, observation.data = obsdata, method="REML", segment.area = segdata$Effort*13800*2, 
                  knots = soap.knots)
 summary(whale.dsm)
 
 
 #plot relative counts over the smooth space
-vis.gam(whale.dsm, plot.type="contour", view = c("x","y"), too.far = 0.06, asp = 1, type = "response", contour.col = "black", n.grid = 100)
+vis.gam(whale.dsm, plot.type="contour", view = c("x","y"), too.far = 0.06, asp = 1, type = "dat_loc_utmponse", contour.col = "black", n.grid = 100)
 plot(balleny_poly_utm, add = TRUE, col = "grey")
 points(true_lat_long_utm, col = "blue", pch = 19)
 
