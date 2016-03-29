@@ -300,10 +300,10 @@ gridpolygon <- rasterToPolygons(grid)
 survey.grid <- intersect(pred.polys, gridpolygon)
 
 #calculate area of each cell (m)
-grid_cell_area <- rep((dat_loc_utm(grid)[1])^2, nrow(coordinates(survey.grid)))*(1-survey.grid$layer/100)
+grid_cell_area <- rep((res(grid)[1])^2, nrow(coordinates(survey.grid)))*(1-survey.grid$layer/100)
 
 #calculate weighted krill around each point
-krill_mean <- apply(coordinates(survey.grid), 1, krillToGrid, thdat_loc_utmhold = dat_loc_utm(grid)[1]/1000, krill_mat = segdata)
+krill_mean <- apply(coordinates(survey.grid), 1, krillToGrid, threshold = res(grid)[1]/1000, krill_mat = segdata)
 
 survey_area <- gArea(pred.polys) - gArea(balleny_poly_utm) #area in m2 minus island area
 
@@ -335,21 +335,25 @@ gridpolygon <- rasterToPolygons(grid)
 survey.grid.large <- intersect(gBuffer(survey.grid, width = 10000), gridpolygon)
 
 #remove boundary points
-ch <- chull(coordinates(survey.grid.large))
+ch     <- chull(coordinates(survey.grid.large))
 coords <- coordinates(survey.grid.large)[c(ch, ch[1]), ] 
 
+#remove knots inside islands
+x <- soap.knots[, 1]
+y <- soap.knots[, 2]
+soap.knots <- soap.knots[inSide(bnd, x, y), ]
 
-#bnd is list of islands boundaries (survey area and 3 islands) which can't overlaps
-bnd <- list(xy.coords(coords))
+#bnd is list of islands boundaries (survey area and 3 islands) which can't overlap
+bnd <- list(xy.coords(coords), xy.coords(fortify(balleny_poly_utm[1])[, 1:2]), xy.coords(fortify(balleny_poly_utm[2])[, 1:2]), xy.coords(fortify(balleny_poly_utm[3])[, 1:2]))
 
-whale.dsm <- dsm(D ~ s(x, y, bs="so", k = 5, xt=list(bnd=bnd)) + krill, family = tw(), ddf.obj = det_function_size, 
+whale.dsm <- dsm(D ~ s(x, y, bs="so", k = 5, xt=list(bnd=bnd)) + s(krill, k = 5), family = tw(), ddf.obj = det_function_size, 
                  segment.data = segdata, observation.data = obsdata, method="REML", segment.area = segdata$Effort*13800*2, 
                  knots = soap.knots)
 summary(whale.dsm)
 
 
 #plot relative counts over the smooth space
-vis.gam(whale.dsm, plot.type="contour", view = c("x","y"), too.far = 0.06, asp = 1, type = "dat_loc_utmponse", contour.col = "black", n.grid = 100)
+vis.gam(whale.dsm, plot.type="contour", view = c("x","y"), asp = 1, type = "response", contour.col = "black", n.grid = 100)
 plot(balleny_poly_utm, add = TRUE, col = "grey")
 points(true_lat_long_utm, col = "blue", pch = 19)
 
