@@ -359,6 +359,7 @@ points(true_lat_long_utm, col = "blue", pch = 19)
 
 #goodness of fit
 gam.check(whale.dsm)
+rqgam.check(whale.dsm) 
 
 #check spatial autocorrelation
 dsm.cor(whale.dsm, max.lag = 10, Segment.Label="Sample.Label")
@@ -391,7 +392,7 @@ p <- ggplot() + grid_plot_obj(fill = whale_pred, name = all.vars(whale.dsm$formu
   geom_polygon(data=balleny_ggplot, aes(x=long, y=lat, group=id), color="black", fill = "grey")
 p
 
-p <- ggplot() + grid_plot_obj(fill = cv + ddf.cv, name = all.vars(whale.dsm$formula)[1], sp = survey.grid) +
+p <- ggplot() + grid_plot_obj(fill = cv + ddf.cv, name = "CV", sp = survey.grid) +
   geom_polygon(data=balleny_ggplot, aes(x=long, y=lat, group=id), color="black", fill = "grey") + 
   geom_point(aes(x = Longitude, y = Latitude), data = data.frame(coordinates(true_lat_long_utm)))
 p
