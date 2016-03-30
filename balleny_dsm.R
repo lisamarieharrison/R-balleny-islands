@@ -252,7 +252,7 @@ plot(det_function)
 #calculate area of each segment using length of segment
 segment.area <- segdata$Effort*13800*2
 
-whale.dsm <- dsm(formula = count ~ s(x, y, k = 10) + krill, family = nb, ddf.obj = det_function, segment.data = segdata, observation.data = obsdata, method="REML", segment.area = segment.area)
+whale.dsm <- dsm(formula = D ~ s(x, y, k = 10) + krill, family = tw(), ddf.obj = det_function, segment.data = segdata, observation.data = obsdata, method="REML", segment.area = segment.area)
 summary(whale.dsm)
 
 #plot relative counts over the smooth space
@@ -283,7 +283,7 @@ pred.polys <- SpatialPolygons(list(Polygons(list(Polygon(coords)), ID=1)), proj4
 
 grid <- raster(extent(pred.polys))
 
-# Choose its dat_loc_utmolution (m)
+# Choose its res (m)
 res(grid) <- 10000
 
 # Make the grid have the same coordinate reference system (CRS) as the shapefile.
@@ -298,12 +298,6 @@ gridpolygon <- rasterToPolygons(grid)
 
 #Intersect with survey area
 survey.grid <- intersect(pred.polys, gridpolygon)
-
-#calculate area of each cell (m)
-grid_cell_area <- rep((res(grid)[1])^2, nrow(coordinates(survey.grid)))*(1-survey.grid$layer/100)
-
-#calculate weighted krill around each point
-krill_mean <- apply(coordinates(survey.grid), 1, krillToGrid, threshold = res(grid)[1]/1000, krill_mat = segdata)
 
 survey_area <- gArea(pred.polys) - gArea(balleny_poly_utm) #area in m2 minus island area
 
@@ -338,15 +332,21 @@ survey.grid.large <- intersect(gBuffer(survey.grid, width = 10000), gridpolygon)
 ch     <- chull(coordinates(survey.grid.large))
 coords <- coordinates(survey.grid.large)[c(ch, ch[1]), ] 
 
+#calculate area of each cell (m)
+grid_cell_area <- rep((res(grid)[1])^2, nrow(coordinates(survey.grid)))*(1-survey.grid$layer/100)
+
+#calculate weighted krill around each point
+krill_mean <- apply(coordinates(survey.grid), 1, krillToGrid, threshold = res(grid)[1]/1000, krill_mat = segdata)
+
+#bnd is list of islands boundaries (survey area and 3 islands) which can't overlap
+bnd <- list(xy.coords(coords), xy.coords(fortify(balleny_poly_utm[1])[, 1:2]), xy.coords(fortify(balleny_poly_utm[2])[, 1:2]), xy.coords(fortify(balleny_poly_utm[3])[, 1:2]))
+
 #remove knots inside islands
 x <- soap.knots[, 1]
 y <- soap.knots[, 2]
 soap.knots <- soap.knots[inSide(bnd, x, y), ]
 
-#bnd is list of islands boundaries (survey area and 3 islands) which can't overlap
-bnd <- list(xy.coords(coords), xy.coords(fortify(balleny_poly_utm[1])[, 1:2]), xy.coords(fortify(balleny_poly_utm[2])[, 1:2]), xy.coords(fortify(balleny_poly_utm[3])[, 1:2]))
-
-whale.dsm <- dsm(D ~ s(x, y, bs="so", k = 5, xt=list(bnd=bnd)) + s(krill, k = 5), family = tw(), ddf.obj = det_function_size, 
+whale.dsm <- dsm(D ~ s(x, y, bs="so", k = 5, xt=list(bnd=bnd)) + krill, family = tw(), ddf.obj = det_function, 
                  segment.data = segdata, observation.data = obsdata, method="REML", segment.area = segdata$Effort*13800*2, 
                  knots = soap.knots)
 summary(whale.dsm)
@@ -367,8 +367,8 @@ dsm.cor(whale.dsm, max.lag = 10, Segment.Label="Sample.Label")
 # ---------------------------- ABUNDANCE ESTIMATION ---------------------------#
 
 #data frame of prediction locations
-preddata <- data.frame(cbind(coordinates(survey.grid), grid_cell_area, krill_mean))
-colnames(preddata) <- c("x", "y", "area", "krill")
+preddata <- data.frame(cbind(coordinates(survey.grid), grid_cell_area, krill_mean, res(grid)[1]), rep(c(1:12), each = 8))
+colnames(preddata) <- c("x", "y", "area", "krill", "Effort")
 
 #calculate predicted values
 if (all.vars(whale.dsm$formula)[1] == "D") {
@@ -376,7 +376,9 @@ if (all.vars(whale.dsm$formula)[1] == "D") {
   #if density model, predict densities in whales/km^2
   whale_pred <- c(predict(whale.dsm, preddata, off.set = 0))/1e-6
   total_individuals <- mean(na.omit(whale_pred))*survey_area*1e-6
-  
+  cv <- c(predict(whale.dsm, preddata, off.set = 0, se.fit = TRUE)$se.fit)/(whale_pred*1e-6)
+  ddf.cv <- summary(whale.dsm$ddf)$average.p.se/summary(whale.dsm$ddf)$average.p
+
 } else {
   
   #if abundance model, predict abundance in each cell
@@ -389,6 +391,12 @@ p <- ggplot() + grid_plot_obj(fill = whale_pred, name = all.vars(whale.dsm$formu
   geom_polygon(data=balleny_ggplot, aes(x=long, y=lat, group=id), color="black", fill = "grey")
 p
 
+p <- ggplot() + grid_plot_obj(fill = cv + ddf.cv, name = all.vars(whale.dsm$formula)[1], sp = survey.grid) +
+  geom_polygon(data=balleny_ggplot, aes(x=long, y=lat, group=id), color="black", fill = "grey") + 
+  geom_point(aes(x = Longitude, y = Latitude), data = data.frame(coordinates(true_lat_long_utm)))
+p
+
+
 # -------------------------- VARIANCE ESTIMATION ---------------------------#
 
 #dsm.var.prop can't handle NA values in preddata so need to na.omit and keep track of data location with prediction.points
@@ -400,12 +408,16 @@ if (all.vars(whale.dsm$formula)[1] == "D") {
   
   #if density model, predict densities in whales/km^2
   dsm.xy.varprop <- dsm.var.prop(whale.dsm, pred.data = preddata.varprop, off.set = 0)
+
+  dsm.xy.varprop <- dsm.var.gam(whale.dsm, pred.data = preddata_na, off.set = 0)
   
+
   } else {
   
   #if abundance model, predict abundance in each cell
   dsm.xy.varprop <- dsm.var.prop(whale.dsm, pred.data = preddata.varprop, off.set = preddata_na$area)
   
+  dsm.xy.varprop <- dsm.var.gam(whale.dsm, pred.data = preddata_na, off.set = preddata_na$area)
 }
 
 
