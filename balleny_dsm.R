@@ -346,16 +346,16 @@ x <- soap.knots[, 1]
 y <- soap.knots[, 2]
 soap.knots <- soap.knots[inSide(bnd, x, y), ]
 
-whale.dsm <- dsm(D ~ s(x, y, bs="so", k = 5, xt=list(bnd=bnd)) + krill, family = tw(), ddf.obj = det_function, 
+whale.dsm <- dsm(D ~ s(x, y, bs="so", k = 5, xt=list(bnd=bnd)) + krill, family = tw(), ddf.obj = det_function_size, 
                  segment.data = segdata, observation.data = obsdata, method="REML", segment.area = segdata$Effort*13800*2, 
                  knots = soap.knots)
 summary(whale.dsm)
 
 
 #plot relative counts over the smooth space
-vis.gam(whale.dsm, plot.type="contour", view = c("x","y"), asp = 1, type = "response", contour.col = "black", n.grid = 100)
+vis.gam(whale.dsm, plot.type="contour", view = c("x","y"), too.far = 0.1, asp = 1, type = "response", contour.col = "black", n.grid = 100)
 plot(balleny_poly_utm, add = TRUE, col = "grey")
-points(true_lat_long_utm, col = "blue", pch = 19)
+points(true_lat_long_utm, pch = 19)
 
 #goodness of fit
 gam.check(whale.dsm)
