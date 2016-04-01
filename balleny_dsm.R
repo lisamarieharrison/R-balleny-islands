@@ -140,6 +140,8 @@ for (i in 1:length(krill$datetime)) {
 
 sighting$distance <- unlist(apply(sighting, 1, sightingDistance, reticle = reticle))
 
+#remove sightings > 10km away because no reticle between 6.5km - 13.8km so distance inacurate
+sighting <- sighting[sighting$distance < 10, ]
 
 #sighting location given specified distance
 
@@ -359,7 +361,7 @@ points(true_lat_long_utm, pch = 19)
 
 #goodness of fit
 gam.check(whale.dsm)
-rqgam.check(whale.dsm) 
+rqgam.check(whale.dsm) #randomised quantile residuals
 
 #check spatial autocorrelation
 dsm.cor(whale.dsm, max.lag = 10, Segment.Label="Sample.Label")
