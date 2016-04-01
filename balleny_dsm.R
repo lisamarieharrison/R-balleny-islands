@@ -272,9 +272,6 @@ dispersiontest(whale.dsm, alternative ="greater")
 #check spatial autocorrelation
 dsm.cor(whale.dsm, max.lag = 10, Segment.Label="Sample.Label")
 
-#AIC check
-pchisq(493.1144 -  491.9856, 1, lower.tail=FALSE)
-
 
 # ------------------------------ SURVEY AREA POLYGON -------------------------------- #
 
