@@ -54,7 +54,8 @@ function_list <- c("gcdHF.R",
                    "removeRasterOverlap.R",
                    "dfFromRaster.R",
                    "krillToGrid.R",
-                   "grid_plot_obj.R"
+                   "grid_plot_obj.R",
+                   "check_cols.R"
 )
 
 for (f in function_list) {
@@ -347,6 +348,9 @@ bnd <- list(xy.coords(coords), xy.coords(fortify(balleny_poly_utm[1])[, 1:2]), x
 x <- soap.knots[, 1]
 y <- soap.knots[, 2]
 soap.knots <- soap.knots[inSide(bnd, x, y), ]
+
+#check data format is correct
+check.cols(ddf.obj = det_function, segment.data = segdata, observation.data = obsdata, segment.area = segment.area)
 
 whale.dsm <- dsm(D ~ s(x, y, bs="so", k = 5, xt=list(bnd=bnd)) + krill, family = tw(), ddf.obj = det_function, 
                  segment.data = segdata, observation.data = obsdata, method="REML", segment.area = segment.area, 
