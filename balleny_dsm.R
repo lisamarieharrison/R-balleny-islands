@@ -229,7 +229,7 @@ segdata  <- na.omit(segdata)
 
 #for ds function
 region.table <- segdata[6]
-region.table$Area <- segdata$Effort*13800
+region.table$Area <- segdata$Effort*(7000 - 200)*2
 region.table <- aggregate(region.table$Area, by = list(region.table$Transect.Label), FUN = "sum")
 names(region.table) <- c("Region.Label", "Area")
 
@@ -240,19 +240,19 @@ obs.table <- obsdata[1:3]
 names(obs.table) <- c("object", "Sample.Label", "Region.Label")
 
 #using ds
-det_function <- ds(data = distdata, truncation = max(distdata$distance), key="hr", adjustment=NULL, sample.table = sample.table, region.table = region.table, obs.table = obs.table)
-det_function_size <- ds(distdata, max(distdata$distance), formula=~size + cloud, key="hr", adjustment=NULL, sample.table = sample.table, region.table = region.table, obs.table = obs.table)
+det_function <- ds(data = distdata, truncation = list(left = 200, right = 7000) , key="hn", adjustment=NULL, sample.table = sample.table, region.table = region.table, obs.table = obs.table)
+det_function_size <- ds(distdata, truncation = list(left = 200, right = 7000) , formula=~size, key="hn", adjustment=NULL, sample.table = sample.table, region.table = region.table, obs.table = obs.table)
 summary(det_function_size)
 plot(det_function)
 
 #using mrds
-#det_function <- ddf(method = 'ds',dsmodel =~ cds(key = "hr", formula=~1), 
-#               data = distdata, meta.data = list(width = 13800))
+det_function <- ddf(method = 'ds',dsmodel =~ cds(key = "gamma", formula=~1), 
+               data = distdata, meta.data = list(left = 200, width = 7000))
 #summary(det_function)
 #plot(det_function)
 
 #calculate area of each segment using length of segment
-segment.area <- segdata$Effort*13800*2
+segment.area <- segdata$Effort*(7000 - 200)*2
 
 whale.dsm <- dsm(formula = D ~ s(x, y, k = 10) + krill, family = tw(), ddf.obj = det_function, segment.data = segdata, observation.data = obsdata, method="REML", segment.area = segment.area)
 summary(whale.dsm)
@@ -348,8 +348,8 @@ x <- soap.knots[, 1]
 y <- soap.knots[, 2]
 soap.knots <- soap.knots[inSide(bnd, x, y), ]
 
-whale.dsm <- dsm(D ~ s(x, y, bs="so", k = 5, xt=list(bnd=bnd)) + krill, family = tw(), ddf.obj = det_function_size, 
-                 segment.data = segdata, observation.data = obsdata, method="REML", segment.area = segdata$Effort*13800*2, 
+whale.dsm <- dsm(D ~ s(x, y, bs="so", k = 5, xt=list(bnd=bnd)) + krill, family = tw(), ddf.obj = det_function, 
+                 segment.data = segdata, observation.data = obsdata, method="REML", segment.area = segment.area, 
                  knots = soap.knots)
 summary(whale.dsm)
 
