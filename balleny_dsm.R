@@ -330,7 +330,7 @@ survey_area <- gArea(pred.polys) - gArea(balleny_poly_utm) #area in m2 minus isl
 island.hole <- gDifference(survey.grid, balleny_poly_utm)
 island.grid <- intersect(island.hole, gridpolygon)
 knot_points <- list(x = coordinates(island.grid)[, 1], y= coordinates(island.grid)[, 2])
-soap.knots  <- make.soapgrid(knot_points, c(5, 10))
+soap.knots  <- make.soapgrid(knot_points, c(8, 8))
 
 #increase survey area by 10km
 
@@ -372,8 +372,8 @@ soap.knots <- soap.knots[inSide(bnd, x, y), ]
 check.cols(ddf.obj = det_function, segment.data = segdata, observation.data = obsdata, segment.area = segment.area)
 
 whale.dsm <- dsm(count ~ s(x, y, bs="sw", k = 5, xt=list(bnd=bnd)) + krill, family = tw(), ddf.obj = det_function, 
-                 segment.data = segdata, observation.data = obsdata, method="REML", segment.area = segment.area
-                 , knots = soap.knots)
+                 segment.data = segdata, observation.data = obsdata, method="REML", segment.area = segment.area,
+                 knots = soap.knots)
 summary(whale.dsm)
 
 
