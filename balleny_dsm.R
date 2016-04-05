@@ -55,7 +55,8 @@ function_list <- c("gcdHF.R",
                    "dfFromRaster.R",
                    "krillToGrid.R",
                    "grid_plot_obj.R",
-                   "check_cols.R"
+                   "check_cols.R",
+                   "reticleDistances.R"
 )
 
 for (f in function_list) {
@@ -142,7 +143,7 @@ for (i in 1:length(krill$datetime)) {
 sighting$distance <- unlist(apply(sighting, 1, sightingDistance, reticle = reticle))
 
 #remove sightings > 10km away because no reticle between 6.5km - 13.8km so distance inacurate
-sighting <- sighting[sighting$distance < 10, ]
+#sighting <- sighting[sighting$distance < 10, ]
 
 #sighting location given specified distance
 
@@ -164,7 +165,6 @@ for (i in 2:length(reticle_dists)) {
   left_bin[i] <- (reticle_dists[i] + (reticle_dists[i - 1] - reticle_dists[i])/2)*1000
   
 }
-left_bin[length(reticle_dists)] <- 7000 #right truncation distance
 left_bin <- c(left_bin, 13800) #right truncation distance
 
 #---------------------------- ALLOCATE POINTS TO TRANSECTS ----------------------------------#
@@ -255,7 +255,7 @@ obs.table <- obsdata[1:3]
 names(obs.table) <- c("object", "Sample.Label", "Region.Label")
 
 #using ds
-det_function <- ds(data = distdata, truncation = list(left = 200, right = 13800), cutpoints = left_bin, key="hr", adjustment=NULL, sample.table = sample.table, region.table = region.table, obs.table = obs.table)
+det_function <- ds(data = distdata, truncation = list(left = 200, right = 13800), cutpoints = left_bin, key="hr", adjustment=NULL)
 det_function_size <- ds(distdata, truncation = list(left = 200, right = 13800), cutpoints = left_bin, formula=~size, key="hr", adjustment=NULL, sample.table = sample.table, region.table = region.table, obs.table = obs.table)
 summary(det_function_size)
 plot(det_function_size)
@@ -330,7 +330,7 @@ survey_area <- gArea(pred.polys) - gArea(balleny_poly_utm) #area in m2 minus isl
 island.hole <- gDifference(survey.grid, balleny_poly_utm)
 island.grid <- intersect(island.hole, gridpolygon)
 knot_points <- list(x = coordinates(island.grid)[, 1], y= coordinates(island.grid)[, 2])
-soap.knots  <- make.soapgrid(knot_points, c(10, 10))
+soap.knots  <- make.soapgrid(knot_points, c(5, 10))
 
 #increase survey area by 10km
 
@@ -371,9 +371,9 @@ soap.knots <- soap.knots[inSide(bnd, x, y), ]
 #check data format is correct
 check.cols(ddf.obj = det_function, segment.data = segdata, observation.data = obsdata, segment.area = segment.area)
 
-whale.dsm <- dsm(D ~ s(x, y, bs="so", k = 5, xt=list(bnd=bnd)) + krill, family = tw(), ddf.obj = det_function, 
-                 segment.data = segdata, observation.data = obsdata, method="REML", segment.area = segment.area, 
-                 knots = soap.knots)
+whale.dsm <- dsm(count ~ s(x, y, bs="sw", k = 5, xt=list(bnd=bnd)) + krill, family = tw(), ddf.obj = det_function, 
+                 segment.data = segdata, observation.data = obsdata, method="REML", segment.area = segment.area
+                 , knots = soap.knots)
 summary(whale.dsm)
 
 
@@ -398,23 +398,29 @@ preddata <- data.frame(cbind(coordinates(survey.grid), grid_cell_area, krill_mea
 colnames(preddata) <- c("x", "y", "area", "krill", "Effort")
 
 #calculate predicted values
-if (all.vars(whale.dsm$formula)[1] == "D") {
-  
-  #if density model, predict densities in whales/km^2
-  whale_pred <- c(predict(whale.dsm, preddata, off.set = 0))/1e-6
-  total_individuals <- mean(na.omit(whale_pred))*survey_area*1e-6
-  cv <- c(predict(whale.dsm, preddata, off.set = 0, se.fit = TRUE)$se.fit)/(whale_pred*1e-6)
-  ddf.cv <- summary(whale.dsm$ddf)$average.p.se/summary(whale.dsm$ddf)$average.p
 
+#if density model, predict densities in whales/km^2
+
+if (class(whale.dsm)[2] == "gamm") {
+  ddf.obj   <- whale.dsm$gam$ddf
+  model.obj <- whale.dsm$gam
 } else {
-  
-  #if abundance model, predict abundance in each cell
-  whale_pred <- c(predict(whale.dsm, preddata, off.set = preddata$area))
-  total_individuals <- sum(na.omit(whale_pred))
-  
+  ddf.obj   <- whale.dsm$ddf
+  model.obj <- whale.dsm
 }
 
-p <- ggplot() + grid_plot_obj(fill = whale_pred, name = all.vars(whale.dsm$formula)[1], sp = survey.grid) +
+if (all.vars(model.obj$formula)[1] == "D") {
+  whale_pred <- c(predict(whale.dsm, preddata, off.set = 0, se.fit = TRUE)$fit/1e-6)
+  print(total_individuals <- mean(na.omit(whale_pred))*survey_area*1e-6)
+  cv <- c(predict(whale.dsm, preddata, off.set = 0, se.fit = TRUE)$se.fit/1e-6/whale_pred)
+} else {
+  whale_pred <- c(predict(whale.dsm, preddata, off.set = preddata$area))
+  print(total_individuals <- sum(na.omit(whale_pred)))
+  cv <- c(predict(whale.dsm, preddata, off.set = preddata$area, se.fit = TRUE)$se.fit)/whale_pred
+}
+ddf.cv <- summary(model.obj$ddf)$average.p.se/summary(model.obj$ddf)$average.p
+
+p <- ggplot() + grid_plot_obj(fill = whale_pred, name = "est", sp = survey.grid) +
   geom_polygon(data=balleny_ggplot, aes(x=long, y=lat, group=id), color="black", fill = "grey")
 p
 
@@ -422,6 +428,7 @@ p <- ggplot() + grid_plot_obj(fill = cv + ddf.cv, name = "CV", sp = survey.grid)
   geom_polygon(data=balleny_ggplot, aes(x=long, y=lat, group=id), color="black", fill = "grey") + 
   geom_point(aes(x = Longitude, y = Latitude), data = data.frame(coordinates(true_lat_long_utm)))
 p
+
 
 
 # -------------------------- VARIANCE ESTIMATION ---------------------------#
