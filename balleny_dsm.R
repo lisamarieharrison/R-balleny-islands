@@ -235,8 +235,8 @@ names(obsdata) <- c("object", "Sample.Label", "Transect.Label", "size", "distanc
 
 distdata <- data.frame(cbind(c(1:nrow(sighting)), sighting$BestNumber, sighting$distance*1000, rep(1, nrow(sighting)), 
             gps$Latitude[match(sighting$GpsIndex, gps$Index)], gps$Longitude[match(sighting$GpsIndex, gps$Index)], 
-            obsdata$Sample.Label, obsdata$Transect.Label, krill_env$SeaState[closest_bin], krill_env$CloudCover[closest_bin]))
-colnames(distdata) <- c("object", "size", "distance", "detected", "latitude", "longitude", "Sample.Label", "Transect.Label", "sea_state", "cloud")
+            obsdata$Sample.Label, obsdata$Transect.Label, krill_env$SeaState[closest_bin], krill_env$CloudCover[closest_bin], krill_env$Sightability[closest_bin]))
+colnames(distdata) <- c("object", "size", "distance", "detected", "latitude", "longitude", "Sample.Label", "Transect.Label", "sea_state", "cloud", "sightability")
 
 obsdata  <- na.omit(obsdata)
 distdata <- na.omit(distdata)
@@ -326,15 +326,6 @@ survey.grid <- intersect(pred.polys, gridpolygon)
 
 survey_area <- gArea(pred.polys) - gArea(balleny_poly_utm) #area in m2 minus island area
 
-# ------------------------------ SOAP FILM SMOOTHER ---------------------------- #
-
-
-#soap smoother to remove island
-island.hole <- gDifference(survey.grid, balleny_poly_utm)
-island.grid <- intersect(island.hole, gridpolygon)
-knot_points <- list(x = coordinates(island.grid)[, 1], y= coordinates(island.grid)[, 2])
-soap.knots  <- make.soapgrid(knot_points, c(8, 10))
-
 #increase survey area by 10km
 
 grid <- raster(extent(gBuffer(survey.grid, width = 10000)))
@@ -342,7 +333,7 @@ grid <- raster(extent(gBuffer(survey.grid, width = 10000)))
 res(grid) <- 10000
 
 # Make the grid have the same coordinate reference system (CRS) as the shapefile.
-proj4string(grid)<-proj4string(gBuffer(survey.grid, width = 10000))
+proj4string(grid)<-proj4string(gBuffer(survey.grid, width = res(grid)[1]))
 
 #get percentage of cells overlapped by islands
 overlap_poly <- getValues(rasterize(balleny_poly_utm, grid, getCover = TRUE))
@@ -351,7 +342,16 @@ grid <- setValues(grid, overlap_poly)
 # Transform this raster into a polygon to create grid
 gridpolygon <- rasterToPolygons(grid)
 
-survey.grid.large <- intersect(gBuffer(survey.grid, width = 10000), gridpolygon)
+survey.grid.large <- intersect(gBuffer(survey.grid, width = res(grid)[1]), gridpolygon)
+
+# ------------------------------ SOAP FILM SMOOTHER ---------------------------- #
+
+
+#soap smoother to remove island
+island.hole <- gDifference(survey.grid, balleny_poly_utm)
+island.grid <- intersect(island.hole, gridpolygon)
+knot_points <- list(x = coordinates(island.grid)[, 1], y= coordinates(island.grid)[, 2])
+soap.knots  <- make.soapgrid(knot_points, c(8, 10))
 
 #remove boundary points
 ch     <- chull(coordinates(survey.grid.large))
