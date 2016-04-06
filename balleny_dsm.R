@@ -371,20 +371,20 @@ soap.knots <- soap.knots[inSide(bnd, x, y), ]
 #check data format is correct
 check.cols(ddf.obj = det_function, segment.data = segdata, observation.data = obsdata, segment.area = segment.area)
 
-whale.dsm <- dsm(count ~ s(x, y, bs="sw", k = 5, xt=list(bnd=bnd)) + krill, family = tw(), ddf.obj = det_function, 
-                 segment.data = segdata, observation.data = obsdata, method="REML", segment.area = segment.area,
-                 knots = soap.knots)
-summary(whale.dsm)
+whale.dsm <- dsm(count ~ s(x, y, bs="sw", k = 5, xt=list(bnd=bnd)) + krill, family = Tweedie(p=1.5), ddf.obj = det_function, 
+                 segment.data = segdata, observation.data = obsdata, method = "REML", segment.area = segment.area,
+                 knots = soap.knots, engine = "gamm", correlation = corAR1(form =~ Sample.Label|Transect.Label))
+summary(whale.dsm$gam)
 
 
 #plot relative counts over the smooth space
-vis.gam(whale.dsm, plot.type="contour", view = c("x","y"), too.far = 0.05, asp = 1, type = "response", contour.col = "black", n.grid = 100)
+vis.gam(whale.dsm, plot.type="contour", view = c("x","y"), too.far = 0.1, asp = 1, type = "response", contour.col = "black", n.grid = 100)
 plot(balleny_poly_utm, add = TRUE, col = "grey")
 points(true_lat_long_utm, pch = 19)
 
 #goodness of fit
 gam.check(whale.dsm)
-rqgam.check(whale.dsm) #randomised quantile residuals
+rqgam.check(whale.dsm$gam) #randomised quantile residuals
 
 
 #check spatial autocorrelation
