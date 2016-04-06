@@ -278,26 +278,6 @@ det_function <- ddf(method = 'ds',dsmodel =~ cds(key = "hr", formula=~1),
 segment.area <- segdata$Effort*(13800 - 200)*2
 
 
-#---------------------------------- DSM WITHOUT SOAP ---------------------------#
-
-whale.dsm <- dsm(formula = D ~ s(x, y, k = 10) + krill, family = tw(), ddf.obj = det_function, segment.data = segdata, observation.data = obsdata, method="REML", segment.area = segment.area)
-summary(whale.dsm)
-
-#plot relative counts over the smooth space
-vis.gam(whale.dsm, plot.type="contour", view = c("x","y"), too.far = 0.06, asp = 1, type = "dat_loc_utmponse", contour.col = "black", n.grid = 100)
-plot(balleny_poly_utm, add = TRUE, col = "grey")
-points(true_lat_long_utm, col = "blue", pch = 19)
-
-#goodness of fit
-gam.check(whale.dsm)
-
-#check overdispersion if poisson glm
-dispersiontest(whale.dsm, alternative ="greater")
-
-#check spatial autocorrelation
-dsm.cor(whale.dsm, max.lag = 10, Segment.Label="Sample.Label")
-
-
 # ------------------------------ SURVEY AREA POLYGON -------------------------------- #
 
 #calculate convex hull around points
