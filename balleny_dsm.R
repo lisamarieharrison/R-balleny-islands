@@ -4,10 +4,10 @@
 
 if (Sys.info()[4] == "SCI-6246") {
   setwd(dir = "C:/Users/43439535/Documents/Lisa/phd/Balleny Islands/csv")
-  source_location <- "C:/Users/43439535/Documents/Lisa/phd/Mixed models/R code/R-functions-southern-ocean/"
+  source_location <- "~/Lisa/phd/Mixed models/R code/R-functions-southern-ocean/"
 } else {
   setwd(dir = "C:/Users/Lisa/Documents/phd/southern ocean/Balleny Islands/csv")
-  source_location <- "C:/Users/Lisa/Documents/phd/southern ocean/Mixed models/R code/R-functions-southern-ocean/"
+  source_location <- "~/phd/southern ocean/Mixed models/R code/R-functions-southern-ocean/"
 }
 
 gps      <- read.csv("GpsData.csv", header = T)
