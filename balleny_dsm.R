@@ -53,7 +53,7 @@ function_list <- c("gcdHF.R",
                    "countIndividalsAroundKrill.R",
                    "removeRasterOverlap.R",
                    "dfFromRaster.R",
-                   "krillToGrid.R",
+                   "envToGrid.R",
                    "grid_plot_obj.R",
                    "check_cols.R",
                    "reticleDistances.R"
@@ -235,7 +235,7 @@ names(obsdata) <- c("object", "Sample.Label", "Transect.Label", "size", "distanc
 
 distdata <- data.frame(cbind(c(1:nrow(sighting)), sighting$BestNumber, sighting$distance*1000, rep(1, nrow(sighting)), 
             gps$Latitude[match(sighting$GpsIndex, gps$Index)], gps$Longitude[match(sighting$GpsIndex, gps$Index)], 
-            obsdata$Sample.Label, obsdata$Transect.Label, krill_env$SeaState[closest_bin], krill_env$SeaState[closest_bin]))
+            obsdata$Sample.Label, obsdata$Transect.Label, krill_env$SeaState[closest_bin], krill_env$CloudCover[closest_bin]))
 colnames(distdata) <- c("object", "size", "distance", "detected", "latitude", "longitude", "Sample.Label", "Transect.Label", "sea_state", "cloud")
 
 obsdata  <- na.omit(obsdata)
@@ -276,6 +276,9 @@ det_function <- ddf(method = 'ds',dsmodel =~ cds(key = "hr", formula=~1),
 
 #calculate area of each segment using length of segment
 segment.area <- segdata$Effort*(13800 - 200)*2
+
+
+#---------------------------------- DSM WITHOUT SOAP ---------------------------#
 
 whale.dsm <- dsm(formula = D ~ s(x, y, k = 10) + krill, family = tw(), ddf.obj = det_function, segment.data = segdata, observation.data = obsdata, method="REML", segment.area = segment.area)
 summary(whale.dsm)
@@ -330,7 +333,7 @@ survey_area <- gArea(pred.polys) - gArea(balleny_poly_utm) #area in m2 minus isl
 island.hole <- gDifference(survey.grid, balleny_poly_utm)
 island.grid <- intersect(island.hole, gridpolygon)
 knot_points <- list(x = coordinates(island.grid)[, 1], y= coordinates(island.grid)[, 2])
-soap.knots  <- make.soapgrid(knot_points, c(8, 8))
+soap.knots  <- make.soapgrid(knot_points, c(8, 10))
 
 #increase survey area by 10km
 
@@ -358,7 +361,9 @@ coords <- coordinates(survey.grid.large)[c(ch, ch[1]), ]
 grid_cell_area <- rep((res(grid)[1])^2, nrow(coordinates(survey.grid)))*(1-survey.grid$layer/100)
 
 #calculate weighted krill around each point
-krill_mean <- apply(coordinates(survey.grid), 1, krillToGrid, threshold = res(grid)[1]/1000, krill_mat = segdata)
+krill_mean <- apply(coordinates(survey.grid), 1, envToGrid, threshold = res(grid)[1]/1000, data_frame = segdata, variable = "krill")
+cloud_mean <- apply(coordinates(survey.grid), 1, envToGrid, threshold = res(grid)[1]/1000, data_frame = segdata, variable = "cloud")
+
 
 #bnd is list of islands boundaries (survey area and 3 islands) which can't overlap
 bnd <- list(xy.coords(coords), xy.coords(fortify(balleny_poly_utm[1])[, 1:2]), xy.coords(fortify(balleny_poly_utm[2])[, 1:2]), xy.coords(fortify(balleny_poly_utm[3])[, 1:2]))
@@ -371,10 +376,10 @@ soap.knots <- soap.knots[inSide(bnd, x, y), ]
 #check data format is correct
 check.cols(ddf.obj = det_function, segment.data = segdata, observation.data = obsdata, segment.area = segment.area)
 
-whale.dsm <- dsm(count ~ s(x, y, bs="sw", k = 5, xt=list(bnd=bnd)) + krill, family = Tweedie(p=1.5), ddf.obj = det_function, 
+whale.dsm <- dsm(count ~ s(x, y, bs="sw", xt=list(bnd=bnd)) + krill, family = "poisson", ddf.obj = det_function, 
                  segment.data = segdata, observation.data = obsdata, method = "REML", segment.area = segment.area,
-                 knots = soap.knots, engine = "gamm", correlation = corAR1(form =~ Sample.Label|Transect.Label))
-summary(whale.dsm$gam)
+                 knots = soap.knots)
+summary(whale.dsm)
 
 
 #plot relative counts over the smooth space
@@ -384,7 +389,7 @@ points(true_lat_long_utm, pch = 19)
 
 #goodness of fit
 gam.check(whale.dsm)
-rqgam.check(whale.dsm$gam) #randomised quantile residuals
+rqgam.check(whale.dsm) #randomised quantile residuals
 
 
 #check spatial autocorrelation
@@ -394,8 +399,8 @@ dsm.cor(whale.dsm, max.lag = 10, Segment.Label="Sample.Label")
 # ---------------------------- ABUNDANCE ESTIMATION ---------------------------#
 
 #data frame of prediction locations
-preddata <- data.frame(cbind(coordinates(survey.grid), grid_cell_area, krill_mean, res(grid)[1]), rep(c(1:12), each = 8))
-colnames(preddata) <- c("x", "y", "area", "krill", "Effort")
+preddata <- data.frame(cbind(coordinates(survey.grid), grid_cell_area, krill_mean, res(grid)[1]), rep(c(1:12), each = 8), cloud_mean)
+colnames(preddata) <- c("x", "y", "area", "krill", "Effort", "cloud")
 
 #calculate predicted values
 
