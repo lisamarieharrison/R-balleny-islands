@@ -274,11 +274,11 @@ det_function <- ddf(method = 'ds',dsmodel =~ cds(key = "hr", formula=~1),
 #summary(det_function)
 #plot(det_function)
 
-#calculate area of each segment using length of segment
-segment.area <- segdata$Effort*(13800 - 200)*2
-
 
 # ------------------------------ SURVEY AREA POLYGON -------------------------------- #
+
+#calculate area of each segment using length of segment
+segment.area <- segdata$Effort*(13800 - 200)*2
 
 #calculate convex hull around points
 ch <- chull(cbind(segdata$x, segdata$y))
@@ -411,7 +411,7 @@ p
 
 p <- ggplot() + grid_plot_obj(fill = cv + ddf.cv, name = "CV", sp = survey.grid) +
   geom_polygon(data=balleny_ggplot, aes(x=long, y=lat, group=id), color="black", fill = "grey") + 
-  geom_point(aes(x = Longitude, y = Latitude), data = data.frame(coordinates(true_lat_long_utm)))
+  geom_point(aes(x = Longitude, y = Latitude), data = data.frame(coordinates(true_lat_long_utm))) 
 p
 
 
