@@ -257,8 +257,8 @@ names(obs.table) <- c("object", "Sample.Label", "Region.Label")
 #using ds
 det_function <- ds(data = distdata, truncation = list(left = 200, right = 13800), cutpoints = left_bin, key="hr", adjustment=NULL)
 det_function_size <- ds(distdata, truncation = list(left = 200, right = 13800), cutpoints = left_bin, formula=~size, key="hr", adjustment=NULL, sample.table = sample.table, region.table = region.table, obs.table = obs.table)
-summary(det_function_size)
-plot(det_function_size)
+summary(det_function)
+plot(det_function)
 
 #using mrds
 
@@ -269,8 +269,8 @@ for (i in 1:nrow(distdata)) {
 
 }
 
-det_function <- ddf(method = 'ds',dsmodel =~ cds(key = "hr", formula=~1),
-               data = distdata, meta.data = list(left = 200, width = 13800,  binned = TRUE, breaks = left_bin))
+#det_function <- ddf(method = 'ds',dsmodel =~ cds(key = "hr", formula=~1),
+ #              data = distdata, meta.data = list(left = 200, width = 13800,  binned = TRUE, breaks = left_bin))
 #summary(det_function)
 #plot(det_function)
 
