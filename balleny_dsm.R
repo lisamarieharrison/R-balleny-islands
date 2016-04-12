@@ -32,6 +32,8 @@ library(rgdal)
 library(plyr) #join
 library(AER) #dispersiontest
 library(rgeos) #gArea
+library(raadsync)
+library(raadtools)
 
 #source required functions
 function_list <- c("gcdHF.R",
@@ -449,6 +451,34 @@ pred[prediction_points] <- dsm.xy.varprop$pred
 p <- ggplot() + grid_plot_obj(sqrt(pred_var)/unlist(pred), "CV", sp = survey.grid) +
   geom_polygon(data=balleny_ggplot, aes(x=long, y=lat, group=id), color="black", fill = "grey")
 p
+
+
+
+#------------------------------- SEA ICE DATA --------------------------------#
+
+#get sea ice percentage coverage from AAD data centre using raadtools
+
+cfg <- read_repo_config(system.file("extdata", "raad_repo_config.json", package= "raadsync"))
+ice_index <- 1
+cfg$do_sync <- seq(nrow(cfg)) == ice_index
+## limit our data to only Feb 2015
+cfg$method_flags[1] <- paste0(cfg$method_flags[1], " --accept=\"*nt_201502*\"")
+## specify local repository location
+my_datadir <- normalizePath("~/Lisa/phd/Balleny Islands/remote data/sea ice", "/")
+options(default.datadir = my_datadir)
+cfg$local_file_root <- file.path(my_datadir, "data")
+
+for (i in 2:6) {
+  
+  ice <- readice(date=chron(dates. = paste0("2015/02/0", i), format = "Y/m/d"))
+  
+  balleny_ice <- spTransform(balleny_poly, proj4string(ice))
+  
+  plot(ice, ext = extent(balleny_ice), main = paste0("0", i, "/02/2015"))
+  plot(balleny_ice, add = TRUE, col = "grey")
+  
+}
+
 
 
 
