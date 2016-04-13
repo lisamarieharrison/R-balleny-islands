@@ -229,8 +229,10 @@ dat_loc_utm <- spTransform(dat_loc, CRS("+proj=utm +zone=58 +south +ellps=WGS84"
 
 #fit detection function
 
-segdata <- data.frame(cbind(krill$Longitude, krill$Latitude, coordinates(dat_loc_utm), krill$Distance_vl, krill$transect, c(1:nrow(krill)), log(krill$arealDen), obs_count, krill_env$CloudCover, krill_env$SeaState, krill_env$Sightability, krill$datetime, as.numeric(as.character(krill_env$SST))))
-colnames(segdata) <- c("longitude", "latitude", "x", "y", "Effort", "Transect.Label", "Sample.Label", "krill", "number", "cloud", "sea_state", "sightability", "datetime", "SST")
+segdata <- data.frame("longitude" =krill$Longitude, "latitude" = krill$Latitude, "x" = coordinates(dat_loc_utm)[, 1], "y" = coordinates(dat_loc_utm)[, 2], 
+                                          "Effort" = krill$Distance_vl, "Transect.Label" = krill$transect, "Sample.Label" = c(1:nrow(krill)), 
+                                          "krill" = log(krill$arealDen), "number" = obs_count, "cloud" = krill_env$CloudCover, "sea_state" = krill_env$SeaState, 
+                                          "sightability" = krill_env$Sightability, "SST" = as.numeric(as.character(krill_env$SST)), "datetime" = krill$datetime)
 
 obsdata <- data.frame(cbind(c(1:nrow(sighting)), closest_bin, segdata$Transect.Label[closest_bin], sighting$BestNumber, sighting$distance*1000))
 names(obsdata) <- c("object", "Sample.Label", "Transect.Label", "size", "distance")
@@ -479,7 +481,7 @@ for (i in 3:6) {
   plot(ice_utm, main = paste0("0", i, "/02/2015"))
   plot(balleny_poly_utm, add = TRUE, col = "grey")
   text(SpatialPoints(coordinates(ice_utm)), round(values(ice_utm)))
-  points(segdata$x[as.Date(segdata$datetime) == paste0("2015-02-0", i)], segdata$y[as.Date(segdata$datetime) == paste0("2015-02-0", i)], pch = 19)
+  points(segdata$x[as.character(as.Date(segdata$datetime)) == paste0("2015-02-0", i)], segdata$y[as.character(as.Date(segdata$datetime)) == paste0("2015-02-0", i)], pch = 19)
   
 }
 
