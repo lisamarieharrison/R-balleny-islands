@@ -419,43 +419,6 @@ p <- ggplot() + grid_plot_obj(fill = cv + ddf.cv, name = "CV", sp = survey.grid)
 p
 
 
-
-# -------------------------- VARIANCE ESTIMATION ---------------------------#
-
-#dsm.var.prop can't handle NA values in preddata so need to na.omit and keep track of data location with prediction.points
-preddata_na <- na.omit(preddata)
-prediction_points <- which(rowSums(is.na(preddata)) == 0)
-preddata.varprop <- split(preddata_na, 1:nrow(preddata_na))
-
-if (all.vars(whale.dsm$formula)[1] == "D") {
-  
-  #if density model, predict densities in whales/km^2
-  dsm.xy.varprop <- dsm.var.prop(whale.dsm, pred.data = preddata.varprop, off.set = 0)
-
-  dsm.xy.varprop <- dsm.var.gam(whale.dsm, pred.data = preddata_na, off.set = 0)
-  
-
-  } else {
-  
-  #if abundance model, predict abundance in each cell
-  dsm.xy.varprop <- dsm.var.prop(whale.dsm, pred.data = preddata.varprop, off.set = preddata_na$area)
-  
-  dsm.xy.varprop <- dsm.var.gam(whale.dsm, pred.data = preddata_na, off.set = preddata_na$area)
-}
-
-
-pred_var <- rep(NA, nrow(preddata))
-pred_var[prediction_points] <- dsm.xy.varprop$pred.var
-
-pred <- rep(NA, nrow(preddata))
-pred[prediction_points] <- dsm.xy.varprop$pred
-
-p <- ggplot() + grid_plot_obj(sqrt(pred_var)/unlist(pred), "CV", sp = survey.grid) +
-  geom_polygon(data=balleny_ggplot, aes(x=long, y=lat, group=id), color="black", fill = "grey")
-p
-
-
-
 #------------------------------- SEA ICE DATA --------------------------------#
 
 #get sea ice percentage coverage from AAD data centre using raadtools
