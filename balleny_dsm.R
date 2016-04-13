@@ -229,8 +229,8 @@ dat_loc_utm <- spTransform(dat_loc, CRS("+proj=utm +zone=58 +south +ellps=WGS84"
 
 #fit detection function
 
-segdata <- data.frame(cbind(krill$Longitude, krill$Latitude, coordinates(dat_loc_utm), krill$Distance_vl, krill$transect, c(1:nrow(krill)), log(krill$arealDen), obs_count, krill_env$CloudCover, krill_env$SeaState, krill_env$Sightability))
-colnames(segdata) <- c("longitude", "latitude", "x", "y", "Effort", "Transect.Label", "Sample.Label", "krill", "number", "cloud", "sea_state", "sightability")
+segdata <- data.frame(cbind(krill$Longitude, krill$Latitude, coordinates(dat_loc_utm), krill$Distance_vl, krill$transect, c(1:nrow(krill)), log(krill$arealDen), obs_count, krill_env$CloudCover, krill_env$SeaState, krill_env$Sightability), krill$datetime)
+colnames(segdata) <- c("longitude", "latitude", "x", "y", "Effort", "Transect.Label", "Sample.Label", "krill", "number", "cloud", "sea_state", "sightability", "datetime")
 
 obsdata <- data.frame(cbind(c(1:nrow(sighting)), closest_bin, segdata$Transect.Label[closest_bin], sighting$BestNumber, sighting$distance*1000))
 names(obsdata) <- c("object", "Sample.Label", "Transect.Label", "size", "distance")
@@ -468,18 +468,18 @@ my_datadir <- normalizePath("~/Lisa/phd/Balleny Islands/remote data/sea ice", "/
 options(default.datadir = my_datadir)
 cfg$local_file_root <- file.path(my_datadir, "data")
 
-for (i in 2:6) {
+for (i in 3:6) {
   
   ice <- readice(date=chron(dates. = paste0("2015/02/0", i), format = "Y/m/d"))
   
   balleny_ice <- spTransform(balleny_poly, proj4string(ice))
+  ice <- crop(subset(ice, 1), extent(balleny_ice) + c(-25000, 25000, -25000, 25000))
+  ice_utm <- reproject(ice, proj4string(balleny_poly_utm), program = "raster", method = "ngb")
   
-  ice <- crop(ice, extent(balleny_ice) + c(-25000, 25000, -25000, 25000))
-  
-  plot(ice, main = paste0("0", i, "/02/2015"))
-  plot(balleny_ice, add = TRUE, col = "grey")
-  text(SpatialPoints(coordinates(ice)), round(values(ice)))
+  plot(ice_utm, main = paste0("0", i, "/02/2015"))
+  plot(balleny_poly_utm, add = TRUE, col = "grey")
+  text(SpatialPoints(coordinates(ice_utm)), round(values(ice_utm)))
+  points(segdata$x[as.Date(segdata$datetime) == paste0("2015-02-0", i)], segdata$y[as.Date(segdata$datetime) == paste0("2015-02-0", i)], pch = 19)
   
 }
-
 
