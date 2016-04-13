@@ -229,8 +229,8 @@ dat_loc_utm <- spTransform(dat_loc, CRS("+proj=utm +zone=58 +south +ellps=WGS84"
 
 #fit detection function
 
-segdata <- data.frame(cbind(krill$Longitude, krill$Latitude, coordinates(dat_loc_utm), krill$Distance_vl, krill$transect, c(1:nrow(krill)), log(krill$arealDen), obs_count, krill_env$CloudCover, krill_env$SeaState, krill_env$Sightability), krill$datetime)
-colnames(segdata) <- c("longitude", "latitude", "x", "y", "Effort", "Transect.Label", "Sample.Label", "krill", "number", "cloud", "sea_state", "sightability", "datetime")
+segdata <- data.frame(cbind(krill$Longitude, krill$Latitude, coordinates(dat_loc_utm), krill$Distance_vl, krill$transect, c(1:nrow(krill)), log(krill$arealDen), obs_count, krill_env$CloudCover, krill_env$SeaState, krill_env$Sightability, krill$datetime, as.numeric(as.character(krill_env$SST))))
+colnames(segdata) <- c("longitude", "latitude", "x", "y", "Effort", "Transect.Label", "Sample.Label", "krill", "number", "cloud", "sea_state", "sightability", "datetime", "SST")
 
 obsdata <- data.frame(cbind(c(1:nrow(sighting)), closest_bin, segdata$Transect.Label[closest_bin], sighting$BestNumber, sighting$distance*1000))
 names(obsdata) <- c("object", "Sample.Label", "Transect.Label", "size", "distance")
@@ -345,6 +345,7 @@ grid_cell_area <- rep((res(grid)[1])^2, nrow(coordinates(survey.grid)))*(1-surve
 #calculate weighted krill around each point
 krill_mean <- apply(coordinates(survey.grid), 1, envToGrid, threshold = res(grid)[1]/1000, data_frame = segdata, variable = "krill")
 cloud_mean <- apply(coordinates(survey.grid), 1, envToGrid, threshold = res(grid)[1]/1000, data_frame = segdata, variable = "cloud")
+SST_mean <- apply(coordinates(survey.grid), 1, envToGrid, threshold = res(grid)[1]/1000, data_frame = segdata, variable = "SST")
 
 
 #bnd is list of islands boundaries (survey area and 3 islands) which can't overlap
@@ -358,7 +359,7 @@ soap.knots <- soap.knots[inSide(bnd, x, y), ]
 #check data format is correct
 check.cols(ddf.obj = det_function, segment.data = segdata, observation.data = obsdata, segment.area = segment.area)
 
-whale.dsm <- dsm(count ~ s(x, y, bs="sw", xt=list(bnd=bnd)) + krill, family = "poisson", ddf.obj = det_function, 
+whale.dsm <- dsm(count ~ s(x, y, bs="sw", xt=list(bnd=bnd)) + krill + SST, family = "poisson", ddf.obj = det_function, 
                  segment.data = segdata, observation.data = obsdata, method = "REML", segment.area = segment.area,
                  knots = soap.knots)
 summary(whale.dsm)
@@ -370,7 +371,6 @@ plot(balleny_poly_utm, add = TRUE, col = "grey")
 points(true_lat_long_utm, pch = 19)
 
 #goodness of fit
-gam.check(whale.dsm)
 rqgam.check(whale.dsm) #randomised quantile residuals
 
 
@@ -381,8 +381,8 @@ dsm.cor(whale.dsm, max.lag = 10, Segment.Label="Sample.Label")
 # ---------------------------- ABUNDANCE ESTIMATION ---------------------------#
 
 #data frame of prediction locations
-preddata <- data.frame(cbind(coordinates(survey.grid), grid_cell_area, krill_mean, res(grid)[1]), rep(c(1:12), each = 8), cloud_mean)
-colnames(preddata) <- c("x", "y", "area", "krill", "Effort", "cloud")
+preddata <- data.frame(cbind(coordinates(survey.grid), grid_cell_area, krill_mean, res(grid)[1], cloud_mean, SST_mean))
+colnames(preddata) <- c("x", "y", "area", "krill", "Effort", "cloud", "SST")
 
 #calculate predicted values
 
