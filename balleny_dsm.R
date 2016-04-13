@@ -474,17 +474,12 @@ for (i in 2:6) {
   
   balleny_ice <- spTransform(balleny_poly, proj4string(ice))
   
-  ice <- crop(ice, extent(balleny_ice))
+  ice <- crop(ice, extent(balleny_ice) + c(-25000, 25000, -25000, 25000))
   
   plot(ice, main = paste0("0", i, "/02/2015"))
   plot(balleny_ice, add = TRUE, col = "grey")
   text(SpatialPoints(coordinates(ice)), round(values(ice)))
   
 }
-
-
-
-
-
 
 
