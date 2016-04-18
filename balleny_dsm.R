@@ -489,5 +489,6 @@ for (i in 3:6) {
   
   plot(ice_raster, main = paste0("2015020", i), colNA = "lightgrey")
   plot(balleny_poly_utm, add = TRUE, col = "grey")
+  points(segdata$x[as.character(as.Date(segdata$datetime)) == paste0("2015-02-0", i)], segdata$y[as.character(as.Date(segdata$datetime)) == paste0("2015-02-0", i)], pch = 19)
   
 }
