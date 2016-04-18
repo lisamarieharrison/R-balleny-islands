@@ -419,7 +419,7 @@ p <- ggplot() + grid_plot_obj(fill = cv + ddf.cv, name = "CV", sp = survey.grid)
 p
 
 
-#------------------------------- SEA ICE DATA --------------------------------#
+#------------------------------- SEA ICE DATA AAD --------------------------------#
 
 #get sea ice percentage coverage from AAD data centre using raadtools
 
@@ -448,3 +448,46 @@ for (i in 3:6) {
   
 }
 
+#------------------------------ SEA ICE DATA AMSR2 ------------------------------#
+
+#sea ice data from http://www.iup.uni-bremen.de:8084/amsr2data/
+#converted h4 files to h5 using h4toh5convert from cmd
+
+#get file information
+gdalinfo("~/Lisa/phd/Balleny Islands/remote data/sea ice/ice.h5")
+gdalinfo("~/Lisa/phd/Balleny Islands/remote data/sea ice/ice_coords.h5") #coordinates stored in separate file
+
+#plot raster of each day
+for (i in 3:6) {
+  
+  ice <- h5read(paste0("~/Lisa/phd/Balleny Islands/remote data/sea ice/asi-AMSR2-s6250-2015020", i, "-v5.h5"), "ASI Ice Concentration")
+  ice_lats <- h5read("~/Lisa/phd/Balleny Islands/remote data/sea ice/ice_coords.h5", "Latitudes")
+  ice_longs <- h5read("~/Lisa/phd/Balleny Islands/remote data/sea ice/ice_coords.h5", "Longitudes")
+  
+  cells <- ice_lats >= extent(balleny_poly)[3] & ice_lats <= extent(balleny_poly)[4] & 
+    ice_longs >= extent(balleny_poly)[1] & ice_longs <= extent(balleny_poly)[2]
+  
+  ice <- ice[cells]
+  ice[is.nan(ice)] <- -999 #set NaN to -999 because rasterize can't handle NA
+  ice_lats <- ice_lats[cells]
+  ice_longs <- ice_longs[cells]
+
+  ice_sp <- SpatialPoints(coords = cbind(ice_longs, ice_lats), proj4string = CRS("+proj=longlat +datum=WGS84"))
+  
+  ice_utm <- spTransform(ice_sp, CRSobj = CRS("+proj=utm +zone=58 +south +ellps=WGS84"))
+  
+  ice_grid <- raster(extent(gBuffer(survey.grid, width = 6500)))
+  # Choose its dat_loc_utmolution (m)
+  res(ice_grid) <- 6500
+  
+  ice_raster <- rasterize(ice_utm, ice_grid, field = ice, FUN = mean)
+  
+  #remove -999 values
+  newVals <- values(ice_raster)
+  newVals[newVals == -999] <- NA
+  ice_raster <- setValues(ice_raster, newVals)
+  
+  plot(ice_raster, main = paste0("2015020", i), colNA = "lightgrey")
+  plot(balleny_poly_utm, add = TRUE, col = "grey")
+  
+}
