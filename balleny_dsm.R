@@ -34,6 +34,7 @@ library(AER) #dispersiontest
 library(rgeos) #gArea
 library(raadsync)
 library(raadtools)
+library(rgdal)
 
 #source required functions
 function_list <- c("gcdHF.R",
@@ -129,7 +130,7 @@ for (i in 2:nrow(gps)) {
 }
 
 #which environmental reading is closest to each krill?
-#each row of krill_env cordat_loc_utmponds to a krill reading
+#each row of krill_env coresponds to a krill reading
 krill_env <- NULL
 for (i in 1:length(krill$datetime)) {
   
@@ -205,6 +206,28 @@ krill$arealDen[krill$arealDen == 0] <- 0.0001
 obs_count <- rep(0, nrow(krill))
 obs_count[as.numeric(names(table(closest_bin)))] <- table(closest_bin)
 
+#-------------------------------- UNDERWAY DATA -------------------------------------#
+
+under <- read.csv("~/Lisa/phd/Balleny Islands/csv/das-data_2015-01-24_2015-03-12.csv", header = T)
+
+under_sp <- SpatialPoints(na.omit(cbind(under$GP500_GPLong, under$GP500_GPLat)), proj4string = CRS("+proj=longlat +datum=WGS84"))
+under_sp <- spTransform(under_sp, CRSobj = CRS("+proj=utm +zone=58 +south +ellps=WGS84"))
+under <- cbind(under[!is.na(under$GP500_GPLong) & !is.na(under$GP500_GPLat), ], coordinates(under_sp))
+colnames(under)[62:63] <- c("x", "y")
+
+under$datetime <- chron(dates. = substr(under$utc, 1, 10), times. = substr(under$utc, 12, 19), format = c(dates. = "y-m-d", times. = "h:m:s"), out.format = c(dates = "d/m/y", times = "h:m:s"))
+under      <- subset(under, under$datetime >= min(krill$datetime) & under$datetime <= max(krill$datetime))
+under$SB21_SB21sal[under$SB21_SB21sal < 20] <- NA #salinity error values
+under$EK60_EK60dbt_38[under$EK60_EK60dbt_38 == 0] <- NA #depth error values
+
+#which environmental reading is closest to each krill?
+#each row of krill_env coresponds to a krill reading
+krill_underway <- NULL
+for (i in 1:length(krill$datetime)) {
+  
+  krill_underway <- rbind(krill_underway, under[which.min(abs(as.numeric(krill$datetime[i] - under$datetime)*24)), ])
+  
+}
 
 # ----------------------------- DENSITY SURFACE MODEL -------------------------------- #
 
@@ -229,10 +252,11 @@ dat_loc_utm <- spTransform(dat_loc, CRS("+proj=utm +zone=58 +south +ellps=WGS84"
 
 #fit detection function
 
-segdata <- data.frame("longitude" =krill$Longitude, "latitude" = krill$Latitude, "x" = coordinates(dat_loc_utm)[, 1], "y" = coordinates(dat_loc_utm)[, 2], 
-                                          "Effort" = krill$Distance_vl, "Transect.Label" = krill$transect, "Sample.Label" = c(1:nrow(krill)), 
-                                          "krill" = log(krill$arealDen), "number" = obs_count, "cloud" = krill_env$CloudCover, "sea_state" = krill_env$SeaState, 
-                                          "sightability" = krill_env$Sightability, "SST" = as.numeric(as.character(krill_env$SST)), "datetime" = krill$datetime)
+segdata <- data.frame("longitude" = krill$Longitude, "latitude" = krill$Latitude, "x" = coordinates(dat_loc_utm)[, 1], "y" = coordinates(dat_loc_utm)[, 2], 
+                       "Effort" = krill$Distance_vl, "Transect.Label" = krill$transect, "Sample.Label" = c(1:nrow(krill)), 
+                       "krill" = log(krill$arealDen), "number" = obs_count, "cloud" = krill_env$CloudCover, "sea_state" = krill_env$SeaState, 
+                       "sightability" = krill_env$Sightability, "SST" = as.numeric(as.character(krill_env$SST)), "datetime" = krill$datetime,
+                       "salinity" = krill_underway$SB21_SB21sal, "bottom_depth" = krill_underway$EK60_EK60dbt_38)
 
 obsdata <- data.frame(cbind(c(1:nrow(sighting)), closest_bin, segdata$Transect.Label[closest_bin], sighting$BestNumber, sighting$distance*1000))
 names(obsdata) <- c("object", "Sample.Label", "Transect.Label", "size", "distance")
@@ -265,13 +289,13 @@ summary(det_function)
 plot(det_function)
 
 #using mrds
-
-for (i in 1:nrow(distdata)) {
-  
-  distdata$distbegin[i] <- left_bin[which(left_bin[1:22] <= distdata$distance[i] & distdata$distance[i] < left_bin[2:23])]
-  distdata$distend[i] <- left_bin[1 + which(left_bin[1:22] <= distdata$distance[i] & distdata$distance[i] < left_bin[2:23])]
-
-}
+# 
+# for (i in 1:nrow(distdata)) {
+#   
+#   distdata$distbegin[i] <- left_bin[which(left_bin[1:22] <= distdata$distance[i] & distdata$distance[i] < left_bin[2:23])]
+#   distdata$distend[i] <- left_bin[1 + which(left_bin[1:22] <= distdata$distance[i] & distdata$distance[i] < left_bin[2:23])]
+# 
+# }
 
 #det_function <- ddf(method = 'ds',dsmodel =~ cds(key = "hr", formula=~1),
  #              data = distdata, meta.data = list(left = 200, width = 13800,  binned = TRUE, breaks = left_bin))
@@ -347,7 +371,9 @@ grid_cell_area <- rep((res(grid)[1])^2, nrow(coordinates(survey.grid)))*(1-surve
 #calculate weighted krill around each point
 krill_mean <- apply(coordinates(survey.grid), 1, envToGrid, threshold = res(grid)[1]/1000, data_frame = segdata, variable = "krill")
 cloud_mean <- apply(coordinates(survey.grid), 1, envToGrid, threshold = res(grid)[1]/1000, data_frame = segdata, variable = "cloud")
-SST_mean <- apply(coordinates(survey.grid), 1, envToGrid, threshold = res(grid)[1]/1000, data_frame = segdata, variable = "SST")
+SST_mean   <- apply(coordinates(survey.grid), 1, envToGrid, threshold = res(grid)[1]/1000, data_frame = segdata, variable = "SST")
+salinity_mean   <- apply(coordinates(survey.grid), 1, envToGrid, threshold = res(grid)[1]/1000, data_frame = under, variable = "SB21_SB21sal")
+depth_mean      <- apply(coordinates(survey.grid), 1, envToGrid, threshold = res(grid)[1]/1000, data_frame = under, variable = "EK60_EK60dbt_38")
 
 
 #bnd is list of islands boundaries (survey area and 3 islands) which can't overlap
@@ -361,7 +387,7 @@ soap.knots <- soap.knots[inSide(bnd, x, y), ]
 #check data format is correct
 check.cols(ddf.obj = det_function, segment.data = segdata, observation.data = obsdata, segment.area = segment.area)
 
-whale.dsm <- dsm(count ~ s(x, y, bs="sw", xt=list(bnd=bnd)) + krill + SST, family = "poisson", ddf.obj = det_function, 
+whale.dsm <- dsm(count ~ s(x, y, bs="sw", xt=list(bnd=bnd)) + krill + SST + s(salinity, k = 3) + s(bottom_depth, k = 3), family = "poisson", ddf.obj = det_function, 
                  segment.data = segdata, observation.data = obsdata, method = "REML", segment.area = segment.area,
                  knots = soap.knots)
 summary(whale.dsm)
@@ -383,8 +409,8 @@ dsm.cor(whale.dsm, max.lag = 10, Segment.Label="Sample.Label")
 # ---------------------------- ABUNDANCE ESTIMATION ---------------------------#
 
 #data frame of prediction locations
-preddata <- data.frame(cbind(coordinates(survey.grid), grid_cell_area, krill_mean, res(grid)[1], cloud_mean, SST_mean))
-colnames(preddata) <- c("x", "y", "area", "krill", "Effort", "cloud", "SST")
+preddata <- data.frame(cbind(coordinates(survey.grid), grid_cell_area, krill_mean, res(grid)[1], cloud_mean, SST_mean, salinity_mean, depth_mean))
+colnames(preddata) <- c("x", "y", "area", "krill", "Effort", "cloud", "SST", "salinity", "bottom_depth")
 
 #calculate predicted values
 
@@ -419,7 +445,7 @@ p <- ggplot() + grid_plot_obj(fill = cv + ddf.cv, name = "CV", sp = survey.grid)
 p
 
 
-#------------------------------- SEA ICE DATA --------------------------------#
+#------------------------------- SEA ICE DATA AAD --------------------------------#
 
 #get sea ice percentage coverage from AAD data centre using raadtools
 
@@ -449,4 +475,65 @@ for (i in 3:6) {
   points(segdata$x[as.character(as.Date(segdata$datetime)) == paste0("2015-02-0", i)], segdata$y[as.character(as.Date(segdata$datetime)) == paste0("2015-02-0", i)], pch = 19)
   
 }
+
+#------------------------------ SEA ICE DATA AMSR2 ------------------------------#
+
+#sea ice data from http://www.iup.uni-bremen.de:8084/amsr2data/
+#converted h4 files to h5 using h4toh5convert from cmd
+
+#get file information
+gdalinfo("~/Lisa/phd/Balleny Islands/remote data/sea ice/ice.h5")
+gdalinfo("~/Lisa/phd/Balleny Islands/remote data/sea ice/ice_coords.h5") #coordinates stored in separate file
+
+#plot raster of each day
+for (i in 3:6) {
+  
+  ice <- h5read(paste0("~/Lisa/phd/Balleny Islands/remote data/sea ice/asi-AMSR2-s6250-2015020", i, "-v5.h5"), "ASI Ice Concentration")
+  ice_lats <- h5read("~/Lisa/phd/Balleny Islands/remote data/sea ice/ice_coords.h5", "Latitudes")
+  ice_longs <- h5read("~/Lisa/phd/Balleny Islands/remote data/sea ice/ice_coords.h5", "Longitudes")
+  
+  cells <- ice_lats >= extent(balleny_poly)[3] & ice_lats <= extent(balleny_poly)[4] & 
+    ice_longs >= extent(balleny_poly)[1] & ice_longs <= extent(balleny_poly)[2]
+  
+  ice <- ice[cells]
+  ice[is.nan(ice)] <- -999 #set NaN to -999 because rasterize can't handle NA
+  ice_lats <- ice_lats[cells]
+  ice_longs <- ice_longs[cells]
+
+  ice_sp <- SpatialPoints(coords = cbind(ice_longs, ice_lats), proj4string = CRS("+proj=longlat +datum=WGS84"))
+  
+  ice_utm <- spTransform(ice_sp, CRSobj = CRS("+proj=utm +zone=58 +south +ellps=WGS84"))
+  
+  ice_grid <- raster(extent(gBuffer(survey.grid, width = 6500)))
+  # Choose its dat_loc_utmolution (m)
+  res(ice_grid) <- 6500
+  
+  ice_raster <- rasterize(ice_utm, ice_grid, field = ice, FUN = mean)
+  
+  #remove -999 values
+  newVals <- values(ice_raster)
+  newVals[newVals == -999] <- NA
+  ice_raster <- setValues(ice_raster, newVals)
+  
+  plot(ice_raster, main = paste0("2015020", i), colNA = "lightgrey")
+  plot(balleny_poly_utm, add = TRUE, col = "grey")
+  points(segdata$x[as.character(as.Date(segdata$datetime)) == paste0("2015-02-0", i)], segdata$y[as.character(as.Date(segdata$datetime)) == paste0("2015-02-0", i)], pch = 19)
+  
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
