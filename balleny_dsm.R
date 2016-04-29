@@ -426,8 +426,10 @@ p
 cfg <- read_repo_config(system.file("extdata", "raad_repo_config.json", package= "raadsync"))
 ice_index <- 1
 cfg$do_sync <- seq(nrow(cfg)) == ice_index
-## limit our data to only Feb 2015
+
+## limit the data to only Feb 2015
 cfg$method_flags[1] <- paste0(cfg$method_flags[1], " --accept=\"*nt_201502*\"")
+
 ## specify local repository location
 my_datadir <- normalizePath("~/Lisa/phd/Balleny Islands/remote data/sea ice", "/")
 options(default.datadir = my_datadir)
