@@ -34,7 +34,8 @@ library(AER) #dispersiontest
 library(rgeos) #gArea
 library(raadsync)
 library(raadtools)
-library(rgdal)
+library(rgdal) #process hdf files
+library(rhdf5) #read hdf files
 
 #source required functions
 function_list <- c("gcdHF.R",
@@ -118,16 +119,6 @@ end_datetime   <- end_datetime + 15/60/24
 krill <- onEffort(krill, start_datetime, end_datetime)
 gps   <- onEffort(gps, start_datetime, end_datetime)
 
-#calculate time between gps readings when on effort
-gps$bin_time <- rep(NA, nrow(gps))
-for (i in 2:nrow(gps)) {
-  bin_time <- as.numeric(gps$datetime[i] - gps$datetime[i - 1])*24*60
-  
-  if (bin_time > 20) {
-    bin_time <- as.numeric(gps$datetime[i + 1] - gps$datetime[i])*24*60
-  }
-  gps$bin_time[i] <- bin_time
-}
 
 #which environmental reading is closest to each krill?
 #each row of krill_env coresponds to a krill reading
@@ -387,11 +378,15 @@ soap.knots <- soap.knots[inSide(bnd, x, y), ]
 #check data format is correct
 check.cols(ddf.obj = det_function, segment.data = segdata, observation.data = obsdata, segment.area = segment.area)
 
-whale.dsm <- dsm(count ~ s(x, y, bs="sw", xt=list(bnd=bnd)) + krill + SST + s(salinity, k = 3) + s(bottom_depth, k = 3), family = "poisson", ddf.obj = det_function, 
+whale.dsm <- dsm(count ~ s(x, y, bs="sw", xt=list(bnd=bnd)) + s(exp(krill), k = 3) + SST + s(salinity, k = 3) + s(bottom_depth, k = 5), family = "poisson", ddf.obj = det_function, 
                  segment.data = segdata, observation.data = obsdata, method = "REML", segment.area = segment.area,
                  knots = soap.knots)
 summary(whale.dsm)
 
+#plots of gam relationships
+for (i in 2:4) {
+  plot(whale.dsm, select = i)
+}
 
 #plot relative counts over the smooth space
 vis.gam(whale.dsm, plot.type="contour", view = c("x","y"), too.far = 0.1, asp = 1, type = "response", contour.col = "black", n.grid = 100)
