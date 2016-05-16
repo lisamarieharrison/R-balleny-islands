@@ -23,12 +23,10 @@ library(maptools) #gcDestination
 library(mapdata)
 library(maps)
 library(raster) 
-library(dsm)
 library(mrds)
 library(dsm) #density surface model
 library(Distance)
 library(sp)
-library(rgdal)
 library(plyr) #join
 library(AER) #dispersiontest
 library(rgeos) #gArea
@@ -208,17 +206,23 @@ colnames(under)[62:63] <- c("x", "y")
 
 under$datetime <- chron(dates. = substr(under$utc, 1, 10), times. = substr(under$utc, 12, 19), format = c(dates. = "y-m-d", times. = "h:m:s"), out.format = c(dates = "d/m/y", times = "h:m:s"))
 under      <- subset(under, under$datetime >= min(krill$datetime) & under$datetime <= max(krill$datetime))
-under$SB21_SB21sal[under$SB21_SB21sal < 20] <- NA #salinity error values
+under$SB21_SB21sal[under$SB21_SB21sal < 26] <- NA #salinity error values
 under$EK60_EK60dbt_38[under$EK60_EK60dbt_38 == 0] <- NA #depth error values
 
-#which environmental reading is closest to each krill?
-#each row of krill_env coresponds to a krill reading
-krill_underway <- NULL
-for (i in 1:length(krill$datetime)) {
+
+#average underway data within krill bins
+
+under_env <- under[, 5:60]
+krill_underway <- data.frame()
+for (i in 1:nrow(krill)) {
   
-  krill_underway <- rbind(krill_underway, under[which.min(abs(as.numeric(krill$datetime[i] - under$datetime)*24)), ])
+  bin_start <- krill$datetime[i] - 5/3600
+  bin_end   <- krill$datetime[i] + 5/3600
+  
+  krill_underway <- rbind(krill_underway, colMeans(under_env[under$datetime >= bin_start & under$datetime <= bin_end, ]))
   
 }
+colnames(krill_underway) <- colnames(under[, 5:60])
 
 # ----------------------------- DENSITY SURFACE MODEL -------------------------------- #
 
