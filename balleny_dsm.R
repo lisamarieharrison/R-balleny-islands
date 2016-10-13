@@ -14,8 +14,10 @@ gps      <- read.csv("GpsData.csv", header = T)
 sighting <- read.csv("Sighting.csv", header = T)
 env      <- read.csv("Environment.csv", header = T)
 effort   <- read.csv("Effort.csv", header = T)
-krill    <- read.csv("Krill.csv", header = T)
+krill    <- read.csv("CombinedKrillDen.csv", header = T)
 reticle  <- read.csv("reticle.csv", header = T)
+under    <- read.csv("das-data_2015-01-24_2015-03-12.csv", header = T)
+
 library(chron)
 library(ggplot2)
 library(geosphere) #destPoint
@@ -68,9 +70,6 @@ for (f in function_list) {
 
 #subset sightings to only HB whales (HB = Species 07) & to only MI platform
 sighting <- subset(sighting, Species == 07 & Platform == "MI")
-
-#remove error values
-krill$arealDen[krill$arealDen == -9.900000e+37] <- NA
 
 #remove duplicated krill rows
 krill <- krill[!duplicated(krill), ]
@@ -180,10 +179,10 @@ plot(krill$Longitude, krill$Latitude, col = "white")
 text(krill$Longitude, krill$Latitude, c(1:nrow(krill)), cex = 0.5)
 
 krill$transect <- rep(NA, nrow(krill))
-krill$transect[1:55]    <- 1
-krill$transect[56:108]  <- 2
-krill$transect[109:160] <- 3
-krill$transect[161:293] <- 4
+krill$transect[1:60]    <- 1
+krill$transect[61:122]  <- 2
+krill$transect[123:194] <- 3
+krill$transect[195:nrow(krill)] <- 4
 
 
 # --------------------------- CALCULATE PERPENDICULAR DISTANCES -----------------------------#
@@ -200,15 +199,10 @@ closest_bin[is.na((closest_bin == Inf))] <- NA
 closest_bin <- unlist(closest_bin)
 closest_distance <- apply(distance, 2, min)*1000
 
-#remove error values
-krill$arealDen[krill$arealDen == 0] <- 0.0001
-
 obs_count <- rep(0, nrow(krill))
 obs_count[as.numeric(names(table(closest_bin)))] <- table(closest_bin)
 
 #-------------------------------- UNDERWAY DATA -------------------------------------#
-
-under <- read.csv("~/Lisa/phd/Balleny Islands/csv/das-data_2015-01-24_2015-03-12.csv", header = T)
 
 under_sp <- SpatialPoints(na.omit(cbind(under$GP500_GPLong, under$GP500_GPLat)), proj4string = CRS("+proj=longlat +datum=WGS84"))
 under_sp <- spTransform(under_sp, CRSobj = CRS("+proj=utm +zone=58 +south +ellps=WGS84"))
@@ -234,7 +228,7 @@ for (i in 1:length(krill$datetime)) {
 #read csv file of coordinates for each island
 for (i in 1:3) {
   
-  b <- read.csv(paste("C:/Users/43439535/Documents/Lisa/phd/Balleny Islands/polygons/Balleny_", i, ".csv", sep = ""), header = F)
+  b <- read.csv(paste("C:/Users/Lisa/Documents/phd/southern ocean/Balleny Islands/polygons/Balleny_", i, ".csv", sep = ""), header = F)
   x <- unlist(b[seq(1, length(b), by = 3)])
   y <- unlist(b[seq(2, length(b), by = 3)])
   assign(paste("b", i, "_poly", sep = ""), Polygon(cbind(x, y), hole = FALSE))
@@ -253,10 +247,11 @@ dat_loc_utm <- spTransform(dat_loc, CRS("+proj=utm +zone=58 +south +ellps=WGS84"
 #fit detection function
 
 segdata <- data.frame("longitude" = krill$Longitude, "latitude" = krill$Latitude, "x" = coordinates(dat_loc_utm)[, 1], "y" = coordinates(dat_loc_utm)[, 2], 
-                       "Effort" = krill$Distance_vl, "Transect.Label" = krill$transect, "Sample.Label" = c(1:nrow(krill)), 
-                       "krill" = log(krill$arealDen), "number" = obs_count, "cloud" = krill_env$CloudCover, "sea_state" = krill_env$SeaState, 
+                       "Effort" = krill$integrationInterval.m, "Transect.Label" = krill$transect, "Sample.Label" = c(1:nrow(krill)), 
+                       "krill" = krill$krillArealDen.gm2, "number" = obs_count, "cloud" = krill_env$CloudCover, "sea_state" = krill_env$SeaState, 
                        "sightability" = krill_env$Sightability, "SST" = as.numeric(as.character(krill_env$SST)), "datetime" = krill$datetime,
-                       "salinity" = krill_underway$SB21_SB21sal, "bottom_depth" = krill_underway$EK60_EK60dbt_38)
+                       "salinity" = krill_underway$SB21_SB21sal, "bottom_depth" = krill_underway$EK60_EK60dbt_38, "density" = krill_underway$SB21_SB21dens,
+                      "chl" = krill_underway$TRIPLET_TripletChl)
 
 obsdata <- data.frame(cbind(c(1:nrow(sighting)), closest_bin, segdata$Transect.Label[closest_bin], sighting$BestNumber, sighting$distance*1000))
 names(obsdata) <- c("object", "Sample.Label", "Transect.Label", "size", "distance")
@@ -287,20 +282,6 @@ det_function <- ds(data = distdata, truncation = list(left = 200, right = 13800)
 det_function_size <- ds(distdata, truncation = list(left = 200, right = 13800), cutpoints = left_bin, formula=~size, key="hr", adjustment=NULL, sample.table = sample.table, region.table = region.table, obs.table = obs.table)
 summary(det_function)
 plot(det_function)
-
-#using mrds
-# 
-# for (i in 1:nrow(distdata)) {
-#   
-#   distdata$distbegin[i] <- left_bin[which(left_bin[1:22] <= distdata$distance[i] & distdata$distance[i] < left_bin[2:23])]
-#   distdata$distend[i] <- left_bin[1 + which(left_bin[1:22] <= distdata$distance[i] & distdata$distance[i] < left_bin[2:23])]
-# 
-# }
-
-#det_function <- ddf(method = 'ds',dsmodel =~ cds(key = "hr", formula=~1),
- #              data = distdata, meta.data = list(left = 200, width = 13800,  binned = TRUE, breaks = left_bin))
-#summary(det_function)
-#plot(det_function)
 
 
 # ------------------------------ SURVEY AREA POLYGON -------------------------------- #
@@ -337,7 +318,7 @@ survey_area <- gArea(pred.polys) - gArea(balleny_poly_utm) #area in m2 minus isl
 #increase survey area by 10km
 
 grid <- raster(extent(gBuffer(survey.grid, width = 10000)))
-# Choose its dat_loc_utmolution (m)
+# Choose its dat_loc_utm (m)
 res(grid) <- 10000
 
 # Make the grid have the same coordinate reference system (CRS) as the shapefile.
@@ -352,6 +333,39 @@ gridpolygon <- rasterToPolygons(grid)
 
 survey.grid.large <- intersect(gBuffer(survey.grid, width = res(grid)[1]), gridpolygon)
 
+#-------------- ATTENUATION FUNCTION FOR EFFORT -----------------------#
+
+createSegmentPoly <- function (x, y, heading, width, length) {
+  
+  gps_lat_lon <- SpatialPoints(cbind(gps$Longitude, gps$Latitude), proj4string = CRS("+proj=longlat +datum=WGS84"))
+  gps_EN <- spTransform(gps_lat_lon, CRSobj = proj4string(balleny_poly_utm))
+  gps$E <- coordinates(gps_EN)[ ,1]
+  gps$N <- coordinates(gps_EN)[, 2]
+  
+  heading <- gps$Heading[which.min(abs(segdata$x[1] - gps$E) + abs(segdata$y[1] - gps$N))]
+  
+  
+ line <-  Line(cbind(c(segdata$x[1], segdata$x[1]), c(segdata$y[1] + segdata$Effort[1]/2, segdata$y[1]- segdata$Effort[1]/2)))
+ 
+ lines <- Lines(list(line), ID = "l")
+ 
+ spatial_line <- SpatialLines(list(lines), proj4string = CRS(proj4string(balleny_poly_utm)))
+  
+ large_line <- gBuffer(spatial_line, width = 12000, capStyle = "FLAT")
+ 
+ overlap <- intersect(balleny_poly_utm, large_line)
+ 
+ if (is.null(overlap)) {
+   overlap_area <- 0
+ } else {
+   overlap_area <- area(overlap)
+ }
+ 
+ percent <- overlap_area/area(large_line)
+
+}
+
+
 # ------------------------------ SOAP FILM SMOOTHER ---------------------------- #
 
 
@@ -359,7 +373,7 @@ survey.grid.large <- intersect(gBuffer(survey.grid, width = res(grid)[1]), gridp
 island.hole <- gDifference(survey.grid, balleny_poly_utm)
 island.grid <- intersect(island.hole, gridpolygon)
 knot_points <- list(x = coordinates(island.grid)[, 1], y= coordinates(island.grid)[, 2])
-soap.knots  <- make.soapgrid(knot_points, c(8, 10))
+soap.knots  <- make.soapgrid(knot_points, c(10, 10))
 
 #remove boundary points
 ch     <- chull(coordinates(survey.grid.large))
@@ -387,9 +401,9 @@ soap.knots <- soap.knots[inSide(bnd, x, y), ]
 #check data format is correct
 check.cols(ddf.obj = det_function, segment.data = segdata, observation.data = obsdata, segment.area = segment.area)
 
-whale.dsm <- dsm(count ~ s(x, y, bs="sw", xt=list(bnd=bnd)) + krill + SST + s(salinity, k = 3) + s(bottom_depth, k = 3), family = "poisson", ddf.obj = det_function, 
+whale.dsm <- dsm(count ~ s(x, y, bs="sw", xt=list(bnd=bnd)) + s(krill, k = 5) + s(density, k = 5) + s(bottom_depth, k = 5), ddf.obj = det_function, 
                  segment.data = segdata, observation.data = obsdata, method = "REML", segment.area = segment.area,
-                 knots = soap.knots)
+                 knots = soap.knots, family = poisson(link = "log"))
 summary(whale.dsm)
 
 
