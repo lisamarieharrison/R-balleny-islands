@@ -223,7 +223,7 @@ colnames(krill_underway) <- colnames(under[, 5:60])
 #read csv file of coordinates for each island
 for (i in 1:3) {
   
-  b <- read.csv(paste("C:/Users/Lisa/Documents/phd/southern ocean/Balleny Islands/polygons/Balleny_", i, ".csv", sep = ""), header = F)
+  b <- read.csv(paste("~/Lisa/phd/Balleny Islands/polygons/Balleny_", i, ".csv", sep = ""), header = F)
   x <- unlist(b[seq(1, length(b), by = 3)])
   y <- unlist(b[seq(2, length(b), by = 3)])
   assign(paste("b", i, "_poly", sep = ""), Polygon(cbind(x, y), hole = FALSE))
@@ -273,11 +273,8 @@ obs.table <- obsdata[1:3]
 names(obs.table) <- c("object", "Sample.Label", "Region.Label")
 
 #using ds
-det_function <- ds(data = distdata, truncation = list(left = 200, right = 13800), cutpoints = left_bin, key="hr", adjustment=NULL)
-det_function_size <- ds(distdata, truncation = list(left = 200, right = 13800), cutpoints = left_bin, formula=~size, key="hr", adjustment=NULL, sample.table = sample.table, region.table = region.table, obs.table = obs.table)
-summary(det_function)
-plot(det_function)
-
+det_function <- ds(data = distdata, truncation = list(left = 200, right = 13800), cutpoints = left_bin, key="hn", adjustment=NULL)
+det_function_size <- ds(distdata, truncation = list(left = 200, right = 13800), cutpoints = left_bin, formula=~size, key="hn", adjustment=NULL, sample.table = sample.table, region.table = region.table, obs.table = obs.table)
 
 # ------------------------------ SURVEY AREA POLYGON -------------------------------- #
 
@@ -396,19 +393,15 @@ soap.knots <- soap.knots[inSide(bnd, x, y), ]
 #check data format is correct
 check.cols(ddf.obj = det_function, segment.data = segdata, observation.data = obsdata, segment.area = segment.area)
 
-whale.dsm <- dsm(count ~ s(x, y, bs="sw", xt=list(bnd=bnd)) + s(exp(krill), k = 3) + SST + s(salinity, k = 3) + s(bottom_depth, k = 5), family = "poisson", ddf.obj = det_function, 
-                 segment.data = segdata, observation.data = obsdata, method = "REML", segment.area = segment.area,
-                 knots = soap.knots, family = poisson(link = "log"))
+whale.dsm <- dsm(count ~ s(x, y, bs="sw", xt=list(bnd=bnd)) + s(krill, k = 3) + s(salinity, k = 3) + s(bottom_depth, k = 5), ddf.obj = det_function, 
+                 segment.data = segdata, observation.data = obsdata, method = "REML", segment.area = segment.area, family = poisson(link = "log"),
+                 knots = soap.knots)
 summary(whale.dsm)
 
 #plot relative counts over the smooth space
 vis.gam(whale.dsm, plot.type="contour", view = c("x","y"), too.far = 0.1, asp = 1, type = "response", contour.col = "black", n.grid = 100)
 plot(balleny_poly_utm, add = TRUE, col = "grey")
 points(true_lat_long_utm, pch = 19)
-
-#goodness of fit
-rqgam.check(whale.dsm) #randomised quantile residuals
-
 
 #check spatial autocorrelation
 dsm.cor(whale.dsm, max.lag = 10, Segment.Label="Sample.Label")
@@ -451,6 +444,7 @@ p <- ggplot() + grid_plot_obj(fill = cv + ddf.cv, name = "CV", sp = survey.grid)
   geom_polygon(data=balleny_ggplot, aes(x=long, y=lat, group=id), color="black", fill = "grey") + 
   geom_point(aes(x = Longitude, y = Latitude), data = data.frame(coordinates(true_lat_long_utm))) 
 p
+
 
 
 #------------------------------- SEA ICE DATA AAD --------------------------------#
