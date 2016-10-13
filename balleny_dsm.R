@@ -25,18 +25,17 @@ library(maptools) #gcDestination
 library(mapdata)
 library(maps)
 library(raster) 
-library(dsm)
 library(mrds)
 library(dsm) #density surface model
 library(Distance)
 library(sp)
-library(rgdal)
 library(plyr) #join
 library(AER) #dispersiontest
 library(rgeos) #gArea
 library(raadsync)
 library(raadtools)
-library(rgdal)
+library(rgdal) #process hdf files
+library(rhdf5) #read hdf files
 
 #source required functions
 function_list <- c("gcdHF.R",
@@ -117,16 +116,6 @@ end_datetime   <- end_datetime + 15/60/24
 krill <- onEffort(krill, start_datetime, end_datetime)
 gps   <- onEffort(gps, start_datetime, end_datetime)
 
-#calculate time between gps readings when on effort
-gps$bin_time <- rep(NA, nrow(gps))
-for (i in 2:nrow(gps)) {
-  bin_time <- as.numeric(gps$datetime[i] - gps$datetime[i - 1])*24*60
-  
-  if (bin_time > 20) {
-    bin_time <- as.numeric(gps$datetime[i + 1] - gps$datetime[i])*24*60
-  }
-  gps$bin_time[i] <- bin_time
-}
 
 #which environmental reading is closest to each krill?
 #each row of krill_env coresponds to a krill reading
@@ -211,17 +200,23 @@ colnames(under)[62:63] <- c("x", "y")
 
 under$datetime <- chron(dates. = substr(under$utc, 1, 10), times. = substr(under$utc, 12, 19), format = c(dates. = "y-m-d", times. = "h:m:s"), out.format = c(dates = "d/m/y", times = "h:m:s"))
 under      <- subset(under, under$datetime >= min(krill$datetime) & under$datetime <= max(krill$datetime))
-under$SB21_SB21sal[under$SB21_SB21sal < 20] <- NA #salinity error values
+under$SB21_SB21sal[under$SB21_SB21sal < 26] <- NA #salinity error values
 under$EK60_EK60dbt_38[under$EK60_EK60dbt_38 == 0] <- NA #depth error values
 
-#which environmental reading is closest to each krill?
-#each row of krill_env coresponds to a krill reading
-krill_underway <- NULL
-for (i in 1:length(krill$datetime)) {
+
+#average underway data within krill bins
+
+under_env <- under[, 5:60]
+krill_underway <- data.frame()
+for (i in 1:nrow(krill)) {
   
-  krill_underway <- rbind(krill_underway, under[which.min(abs(as.numeric(krill$datetime[i] - under$datetime)*24)), ])
+  bin_start <- krill$datetime[i] - 5/3600
+  bin_end   <- krill$datetime[i] + 5/3600
+  
+  krill_underway <- rbind(krill_underway, colMeans(under_env[under$datetime >= bin_start & under$datetime <= bin_end, ]))
   
 }
+colnames(krill_underway) <- colnames(under[, 5:60])
 
 # ----------------------------- DENSITY SURFACE MODEL -------------------------------- #
 
@@ -401,11 +396,10 @@ soap.knots <- soap.knots[inSide(bnd, x, y), ]
 #check data format is correct
 check.cols(ddf.obj = det_function, segment.data = segdata, observation.data = obsdata, segment.area = segment.area)
 
-whale.dsm <- dsm(count ~ s(x, y, bs="sw", xt=list(bnd=bnd)) + s(krill, k = 5) + s(density, k = 5) + s(bottom_depth, k = 5), ddf.obj = det_function, 
+whale.dsm <- dsm(count ~ s(x, y, bs="sw", xt=list(bnd=bnd)) + s(exp(krill), k = 3) + SST + s(salinity, k = 3) + s(bottom_depth, k = 5), family = "poisson", ddf.obj = det_function, 
                  segment.data = segdata, observation.data = obsdata, method = "REML", segment.area = segment.area,
                  knots = soap.knots, family = poisson(link = "log"))
 summary(whale.dsm)
-
 
 #plot relative counts over the smooth space
 vis.gam(whale.dsm, plot.type="contour", view = c("x","y"), too.far = 0.1, asp = 1, type = "response", contour.col = "black", n.grid = 100)
