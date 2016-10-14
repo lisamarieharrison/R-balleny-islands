@@ -325,7 +325,6 @@ colnames(distdata) <- c("object", "size", "distance", "detected", "latitude", "l
 
 obsdata  <- na.omit(obsdata)
 distdata <- na.omit(distdata)
-segdata  <- na.omit(segdata)
 
 #for ds function
 region.table <- segdata[6]
@@ -414,6 +413,7 @@ cloud_mean <- apply(coordinates(survey.grid), 1, envToGrid, threshold = res(grid
 SST_mean   <- apply(coordinates(survey.grid), 1, envToGrid, threshold = res(grid)[1]/1000, data_frame = segdata, variable = "SST")
 salinity_mean   <- apply(coordinates(survey.grid), 1, envToGrid, threshold = res(grid)[1]/1000, data_frame = under, variable = "SB21_SB21sal")
 depth_mean      <- apply(coordinates(survey.grid), 1, envToGrid, threshold = res(grid)[1]/1000, data_frame = under, variable = "EK60_EK60dbt_38")
+chl_mean      <- apply(coordinates(survey.grid), 1, envToGrid, threshold = res(grid)[1]/1000, data_frame = under, variable = "TRIPLET_TripletChl")
 
 
 #bnd is list of islands boundaries (survey area and 3 islands) which can't overlap
@@ -434,9 +434,9 @@ segdata$idx0_bottom_depth <- 1
 segdata$idx0_bottom_depth[is.na(segdata$bottom_depth)] <- 2:(sum(segdata$mx0_bottom_depth) + 1)
 segdata$bottom_depth[is.na(segdata$bottom_depth)] <- mean(na.omit(segdata$bottom_depth))
 
-whale.dsm <- dsm(count ~ s(x, y, bs="sw", xt=list(bnd=bnd)) + s(krill, k = 5) + s(salinity, k = 5) + s(SST, k = 5) + s(chl, k = 5) + s(bottom_depth, k = 5, by = ordered(!segdata$mx0_bottom_depth)) +
-                   + s(segdata$idx0_bottom_depth, k = 5, by = ordered(!segdata$mx0_bottom_depth)), ddf.obj = det_function, 
-                 segment.data = segdata, observation.data = obsdata, method = "REML", segment.area = segment.area, family = poisson(link = "log"),
+whale.dsm <- dsm(Nhat ~ s(x, y, bs="sw", xt=list(bnd=bnd)) + s(krill, k = 5) + s(salinity) + s(chl) + s(bottom_depth, by = ordered(!segdata$mx0_bottom_depth)) +
+                   + s(segdata$idx0_bottom_depth, by = ordered(!segdata$mx0_bottom_depth)), ddf.obj = det_function_size, 
+                 segment.data = segdata, observation.data = obsdata, method = "REML", segment.area = segment.area, 
                  knots = soap.knots)
 summary(whale.dsm)
 
@@ -452,8 +452,8 @@ dsm.cor(whale.dsm, max.lag = 10, Segment.Label="Sample.Label")
 # ---------------------------- ABUNDANCE ESTIMATION ---------------------------#
 
 #data frame of prediction locations
-preddata <- data.frame(cbind(coordinates(survey.grid), grid_cell_area, krill_mean, res(grid)[1], cloud_mean, SST_mean, salinity_mean, depth_mean))
-colnames(preddata) <- c("x", "y", "area", "krill", "Effort", "cloud", "SST", "salinity", "bottom_depth")
+preddata <- data.frame(cbind(coordinates(survey.grid), grid_cell_area, krill_mean, res(grid)[1], cloud_mean, SST_mean, salinity_mean, depth_mean, chl_mean, 0, 1))
+colnames(preddata) <- c("x", "y", "area", "krill", "Effort", "cloud", "SST", "salinity", "bottom_depth", "chl", "mx0_bottom_depth", "idx0_bottom_depth")
 
 #calculate predicted values
 
