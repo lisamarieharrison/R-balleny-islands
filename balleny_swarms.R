@@ -21,6 +21,7 @@ hist(island_swarms$Corrected_length)
 hist(post_swarms$Corrected_length)
 
 #K-S test for swarm density
+#probably from the same distribution ( = 0.1027)
 ks.test(island_swarms$volDengPerm3, post_swarms$volDengPerm3)
 
 #create datetime
@@ -34,9 +35,33 @@ post_hours <- as.numeric(max(post_swarms$datetime) - min(post_swarms$datetime))*
 
 #swarms/hour
 #twice as many krill swarms per hour at Balleny Islands (may need to run by km to account for speed?)
+#at islands you might be measuring the same swarm twice so simple encounter rate doesn't work?
 nrow(island_swarms)/island_hours
 nrow(post_swarms)/post_hours
 
+
+
+#Point process on a line network
+
+marked_points <- data.frame("longitude" = island_swarms$Lon_M, "latitude" = island_swarms$Lat_M)
+
+#convert to utm so units are in m
+xy = data.frame(marked_points$longitude, marked_points$latitude)
+colnames(coordinates(xy)) <- c("lon", "lat")
+proj4string(xy) <- CRS("+proj=longlat +dat_botum=WGS84")
+marked_points[, 1:2] <- coordinates(spTransform(xy, CRS("+proj=utm +zone=53 ellps=WGS84")))
+
+marked_points$tp <- (marked_points$latitude - min(marked_points$latitude))/(max(marked_points$latitude) - min(marked_points$latitude))
+owin <- owin(xrange = c(min(marked_points$longitude), max(marked_points$longitude)), yrange = c(min(marked_points$latitude), max(marked_points$latitude)))
+transect_bounds <- ppp(x = marked_points$longitude, y = marked_points$latitude, window = owin)
+jointed_vertices <- matrix(FALSE, nrow = nrow(marked_points), ncol = nrow(marked_points))
+pairs <- cbind(seq(1, nrow(marked_points) - 1), seq(2, nrow(marked_points)))
+jointed_vertices[rbind(pairs, cbind(pairs[, 2], pairs[, 1]))] <- TRUE
+
+
+transect_line <- linnet(vertices = transect_bounds, m = jointed_vertices)
+names(marked_points) <- c("x", "y", "tp")
+point_network <- lpp(X = marked_points, L = transect_line)
 
 
 
