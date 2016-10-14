@@ -308,26 +308,24 @@ for (i in 1:nrow(krill)) {
 #fit detection function
 
 segdata <- data.frame("longitude" = krill$Longitude, "latitude" = krill$Latitude, "x" = coordinates(dat_loc_utm)[, 1], "y" = coordinates(dat_loc_utm)[, 2], 
-                       "Effort" = krill$integrationInterval.m, "Transect.Label" = krill$transect, "Sample.Label" = c(1:nrow(krill)), 
-                       "krill" = krill$krillArealDen.gm2, "number" = obs_count, "cloud" = krill_env$CloudCover, "sea_state" = krill_env$SeaState, 
-                       "sightability" = krill_env$Sightability, "SST" = as.numeric(as.character(krill_env$SST)), "datetime" = krill$datetime,
-                       "salinity" = krill_underway$SB21_SB21sal, "bottom_depth" = krill_underway$EK60_EK60dbt_38, "density" = krill_underway$SB21_SB21dens,
-                      "chl" = krill_underway$TRIPLET_TripletChl)
+                      "Effort" = krill$integrationInterval.m, "Transect.Label" = krill$transect, "Sample.Label" = c(1:nrow(krill)), 
+                      "krill" = krill$krillArealDen.gm2, "number" = obs_count, "cloud" = krill_env$CloudCover, "sea_state" = krill_env$SeaState, 
+                      "sightability" = krill_env$Sightability, "SST" = as.numeric(as.character(krill_env$SST)), "datetime" = krill$datetime,
+                      "salinity" = krill_underway$SB21_SB21sal, "bottom_depth" = krill_underway$EK60_EK60dbt_38, "density" = krill_underway$SB21_SB21dens,
+                      "chl" = krill_underway$TRIPLET_TripletChl, "overlap" = percent)
 
 obsdata <- data.frame(cbind(c(1:nrow(sighting)), closest_bin, segdata$Transect.Label[closest_bin], sighting$BestNumber, sighting$distance*1000))
 names(obsdata) <- c("object", "Sample.Label", "Transect.Label", "size", "distance")
 
 distdata <- data.frame(cbind(c(1:nrow(sighting)), sighting$BestNumber, sighting$distance*1000, rep(1, nrow(sighting)), 
-            gps$Latitude[match(sighting$GpsIndex, gps$Index)], gps$Longitude[match(sighting$GpsIndex, gps$Index)], 
-            obsdata$Sample.Label, obsdata$Transect.Label, krill_env$SeaState[closest_bin], krill_env$CloudCover[closest_bin], krill_env$Sightability[closest_bin]))
+                             gps$Latitude[match(sighting$GpsIndex, gps$Index)], gps$Longitude[match(sighting$GpsIndex, gps$Index)], 
+                             obsdata$Sample.Label, obsdata$Transect.Label, krill_env$SeaState[closest_bin], krill_env$CloudCover[closest_bin], krill_env$Sightability[closest_bin]))
 colnames(distdata) <- c("object", "size", "distance", "detected", "latitude", "longitude", "Sample.Label", "Transect.Label", "sea_state", "cloud", "sightability")
 
-#calculate area of each segment using length of segment
-segment.area <- segdata$Effort*(13800 - 200)*2*(100 - percent)
 
-# obsdata  <- na.omit(obsdata)
-# distdata <- na.omit(distdata)
-# segdata  <- na.omit(segdata)
+obsdata  <- na.omit(obsdata)
+distdata <- na.omit(distdata)
+segdata  <- na.omit(segdata)
 
 #for ds function
 region.table <- segdata[6]
@@ -346,6 +344,9 @@ det_function <- ds(data = distdata, truncation = list(left = 200, right = 13800)
 det_function_size <- ds(distdata, truncation = list(left = 200, right = 13800), cutpoints = left_bin, formula=~size, key="hn", adjustment=NULL, sample.table = sample.table, region.table = region.table, obs.table = obs.table)
 
 # ------------------------------ SURVEY AREA POLYGON -------------------------------- #
+
+#calculate area of each segment using length of segment
+segment.area <- segdata$Effort*(13800 - 200)*2*(1-segdata$overlap)
 
 #calculate convex hull around points
 ch <- chull(cbind(segdata$x, segdata$y))
@@ -426,7 +427,15 @@ soap.knots <- soap.knots[inSide(bnd, x, y), ]
 #check data format is correct
 check.cols(ddf.obj = det_function, segment.data = segdata, observation.data = obsdata, segment.area = segment.area)
 
-whale.dsm <- dsm(count ~ s(x, y, bs="sw", xt=list(bnd=bnd)) + s(krill, k = 3) + s(salinity, k = 3) + s(bottom_depth, k = 5), ddf.obj = det_function, 
+
+#random effects to stop gam throwing out missing data
+segdata$mx0_bottom_depth <- as.numeric(is.na(segdata$bottom_depth))
+segdata$idx0_bottom_depth <- 1
+segdata$idx0_bottom_depth[is.na(segdata$bottom_depth)] <- 2:(sum(segdata$mx0_bottom_depth) + 1)
+segdata$bottom_depth[is.na(segdata$bottom_depth)] <- mean(na.omit(segdata$bottom_depth))
+
+whale.dsm <- dsm(count ~ s(x, y, bs="sw", xt=list(bnd=bnd)) + s(krill, k = 5) + s(salinity, k = 5) + s(SST, k = 5) + s(chl, k = 5) + s(bottom_depth, k = 5, by = ordered(!segdata$mx0_bottom_depth)) +
+                   + s(segdata$idx0_bottom_depth, k = 5, by = ordered(!segdata$mx0_bottom_depth)), ddf.obj = det_function, 
                  segment.data = segdata, observation.data = obsdata, method = "REML", segment.area = segment.area, family = poisson(link = "log"),
                  knots = soap.knots)
 summary(whale.dsm)
@@ -534,7 +543,7 @@ for (i in 3:6) {
   ice[is.nan(ice)] <- -999 #set NaN to -999 because rasterize can't handle NA
   ice_lats <- ice_lats[cells]
   ice_longs <- ice_longs[cells]
-
+  
   ice_sp <- SpatialPoints(coords = cbind(ice_longs, ice_lats), proj4string = CRS("+proj=longlat +datum=WGS84"))
   
   ice_utm <- spTransform(ice_sp, CRSobj = CRS("+proj=utm +zone=58 +south +ellps=WGS84"))
