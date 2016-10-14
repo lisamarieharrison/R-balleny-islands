@@ -218,6 +218,7 @@ for (i in 1:nrow(krill)) {
 }
 colnames(krill_underway) <- colnames(under[, 5:60])
 
+
 # ----------------------------- DENSITY SURFACE MODEL -------------------------------- #
 
 #read csv file of coordinates for each island
@@ -239,6 +240,71 @@ dat_loc     <- SpatialPoints(cbind(krill$Longitude, krill$Latitude), proj4string
 dat_loc_utm <- spTransform(dat_loc, CRS("+proj=utm +zone=58 +south +ellps=WGS84"))
 
 
+
+#-------------- ATTENUATION FUNCTION FOR EFFORT -----------------------#
+
+front_coords <- matrix(NA, ncol = 2, nrow = nrow(krill))
+back_coords <- matrix(NA, ncol = 2, nrow = nrow(krill))
+
+for (i in 1:nrow(krill)) {
+  
+  angle <- gps$Heading[which.min(abs(gps$datetime -  krill$datetime[i]))]
+  
+  if (angle < 180) {
+    
+    angle_back <- angle + 180
+    
+  } else {
+    
+    angle_back <- angle - 180
+    
+  }
+  
+  distance <- krill$integrationInterval.m[1]/2
+  
+  coords_fwd <- destPoint(p = c(krill$Longitude[i], krill$Latitude[i]),
+                          b = angle, d = distance)
+  
+  coords_back <- destPoint(p = c(krill$Longitude[i], krill$Latitude[i]),
+                           b = angle_back, d = distance)
+  
+  
+  coords_fwd <- SpatialPoints(coords_fwd, CRS(proj4string(balleny_poly)))
+  coords_fwd <- spTransform(coords_fwd, CRS(proj4string(balleny_poly_utm)))
+  
+  coords_back <- SpatialPoints(coords_back, CRS(proj4string(balleny_poly)))
+  coords_back <- spTransform(coords_back, CRS(proj4string(balleny_poly_utm)))
+  
+  front_coords[i, ] <- coordinates(coords_fwd)
+  back_coords[i, ]  <- coordinates(coords_back)
+  
+}
+
+percent <- NULL
+for (i in 1:nrow(krill)) {
+  
+  
+  line <-  Line(matrix(c(front_coords[i, ], back_coords[i, ]), nrow = 2, byrow = T))
+  
+  lines <- Lines(list(line), ID = "l")
+  
+  spatial_line <- SpatialLines(list(lines), proj4string = CRS(proj4string(balleny_poly_utm)))
+  
+  large_line <- gBuffer(spatial_line, width = 12000, capStyle = "FLAT")
+  
+  suppressWarnings(overlap <- intersect(balleny_poly_utm, large_line))
+  
+  if (is.null(overlap)) {
+    overlap_area <- 0
+  } else {
+    overlap_area <- area(overlap)
+  }
+  
+  percent[i] <- overlap_area/area(large_line)
+  
+}
+
+
 #fit detection function
 
 segdata <- data.frame("longitude" = krill$Longitude, "latitude" = krill$Latitude, "x" = coordinates(dat_loc_utm)[, 1], "y" = coordinates(dat_loc_utm)[, 2], 
@@ -256,9 +322,12 @@ distdata <- data.frame(cbind(c(1:nrow(sighting)), sighting$BestNumber, sighting$
             obsdata$Sample.Label, obsdata$Transect.Label, krill_env$SeaState[closest_bin], krill_env$CloudCover[closest_bin], krill_env$Sightability[closest_bin]))
 colnames(distdata) <- c("object", "size", "distance", "detected", "latitude", "longitude", "Sample.Label", "Transect.Label", "sea_state", "cloud", "sightability")
 
-obsdata  <- na.omit(obsdata)
-distdata <- na.omit(distdata)
-segdata  <- na.omit(segdata)
+#calculate area of each segment using length of segment
+segment.area <- segdata$Effort*(13800 - 200)*2*(100 - percent)
+
+# obsdata  <- na.omit(obsdata)
+# distdata <- na.omit(distdata)
+# segdata  <- na.omit(segdata)
 
 #for ds function
 region.table <- segdata[6]
@@ -277,9 +346,6 @@ det_function <- ds(data = distdata, truncation = list(left = 200, right = 13800)
 det_function_size <- ds(distdata, truncation = list(left = 200, right = 13800), cutpoints = left_bin, formula=~size, key="hn", adjustment=NULL, sample.table = sample.table, region.table = region.table, obs.table = obs.table)
 
 # ------------------------------ SURVEY AREA POLYGON -------------------------------- #
-
-#calculate area of each segment using length of segment
-segment.area <- segdata$Effort*(13800 - 200)*2
 
 #calculate convex hull around points
 ch <- chull(cbind(segdata$x, segdata$y))
@@ -324,39 +390,6 @@ grid <- setValues(grid, overlap_poly)
 gridpolygon <- rasterToPolygons(grid)
 
 survey.grid.large <- intersect(gBuffer(survey.grid, width = res(grid)[1]), gridpolygon)
-
-#-------------- ATTENUATION FUNCTION FOR EFFORT -----------------------#
-
-createSegmentPoly <- function (x, y, heading, width, length) {
-  
-  gps_lat_lon <- SpatialPoints(cbind(gps$Longitude, gps$Latitude), proj4string = CRS("+proj=longlat +datum=WGS84"))
-  gps_EN <- spTransform(gps_lat_lon, CRSobj = proj4string(balleny_poly_utm))
-  gps$E <- coordinates(gps_EN)[ ,1]
-  gps$N <- coordinates(gps_EN)[, 2]
-  
-  heading <- gps$Heading[which.min(abs(segdata$x[1] - gps$E) + abs(segdata$y[1] - gps$N))]
-  
-  
- line <-  Line(cbind(c(segdata$x[1], segdata$x[1]), c(segdata$y[1] + segdata$Effort[1]/2, segdata$y[1]- segdata$Effort[1]/2)))
- 
- lines <- Lines(list(line), ID = "l")
- 
- spatial_line <- SpatialLines(list(lines), proj4string = CRS(proj4string(balleny_poly_utm)))
-  
- large_line <- gBuffer(spatial_line, width = 12000, capStyle = "FLAT")
- 
- overlap <- intersect(balleny_poly_utm, large_line)
- 
- if (is.null(overlap)) {
-   overlap_area <- 0
- } else {
-   overlap_area <- area(overlap)
- }
- 
- percent <- overlap_area/area(large_line)
-
-}
-
 
 # ------------------------------ SOAP FILM SMOOTHER ---------------------------- #
 
