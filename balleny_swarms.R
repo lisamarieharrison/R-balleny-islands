@@ -23,6 +23,7 @@ hist(post_swarms$Corrected_length)
 #K-S test for swarm density
 #probably from the same distribution ( = 0.1027)
 ks.test(island_swarms$volDengPerm3, post_swarms$volDengPerm3)
+ks.test(island_swarms$Corrected_length, post_swarms$Corrected_length, alternative = "greater")
 
 #create datetime
 island_swarms$datetime <- chron(dates. = paste0(substr(island_swarms$Date_S, 1, 4), "/", substr(island_swarms$Date_S, 5, 6), "/", substr(island_swarms$Date_S, 7, 8)), times. = island_swarms$Time_S, format = c(dates = "y/m/d", times = "h:m:s"), out.format = c(dates = "d/m/y", times = "h:m:s"))
