@@ -434,7 +434,8 @@ segdata$idx0_bottom_depth <- 1
 segdata$idx0_bottom_depth[is.na(segdata$bottom_depth)] <- 2:(sum(segdata$mx0_bottom_depth) + 1)
 segdata$bottom_depth[is.na(segdata$bottom_depth)] <- mean(na.omit(segdata$bottom_depth))
 
-whale.dsm <- dsm(Nhat ~ s(x, y, bs="sw", xt=list(bnd=bnd)) + s(krill, k = 5) + s(salinity) + s(chl) + s(bottom_depth, by = ordered(!segdata$mx0_bottom_depth)) +
+
+whale.dsm <- dsm(Nhat ~ s(x, y, bs="sw", xt=list(bnd=bnd)) + s(krill, k = 5) + s(salinity, k = 5) + s(chl, k = 5) + s(bottom_depth, k = 5, by = ordered(!segdata$mx0_bottom_depth)) +
                    + s(segdata$idx0_bottom_depth, by = ordered(!segdata$mx0_bottom_depth)), ddf.obj = det_function_size, 
                  segment.data = segdata, observation.data = obsdata, method = "REML", segment.area = segment.area, 
                  knots = soap.knots)
