@@ -29,16 +29,21 @@ ks.test(island_swarms$Corrected_length, post_swarms$Corrected_length, alternativ
 island_swarms$datetime <- chron(dates. = paste0(substr(island_swarms$Date_S, 1, 4), "/", substr(island_swarms$Date_S, 5, 6), "/", substr(island_swarms$Date_S, 7, 8)), times. = island_swarms$Time_S, format = c(dates = "y/m/d", times = "h:m:s"), out.format = c(dates = "d/m/y", times = "h:m:s"))
 post_swarms$datetime <- chron(dates. = paste0(substr(post_swarms$Date_S, 1, 4), "/", substr(post_swarms$Date_S, 5, 6), "/", substr(post_swarms$Date_S, 7, 8)), times. = post_swarms$Time_S, format = c(dates = "y/m/d", times = "h:m:s"), out.format = c(dates = "d/m/y", times = "h:m:s"))
 
-#number of hours in each area
-island_hours <- as.numeric(max(island_swarms$datetime) - min(island_swarms$datetime))*24
-post_hours <- as.numeric(max(post_swarms$datetime) - min(post_swarms$datetime))*24
 
+#------------------------------- ENCOUNTER RATE --------------------------------------#
 
-#swarms/hour
-#twice as many krill swarms per hour at Balleny Islands (may need to run by km to account for speed?)
-#at islands you might be measuring the same swarm twice so simple encounter rate doesn't work?
-nrow(island_swarms)/island_hours
-nrow(post_swarms)/post_hours
+island_density <- read.csv("C:/Users/43439535/Documents/Lisa/phd/Balleny Islands/csv/CombinedKrillDen.csv", header = T)
+post_density   <- read.csv("C:/Users/43439535/Documents/Lisa/phd/Balleny Islands/csv/post_density.csv", header = T)
+
+island_density$Distance_vl[island_density$Distance_vl < 0] <- NA
+island_distance <- (max(na.omit(island_density$Distance_vl)) - min(na.omit(island_density$Distance_vl))) * 1.852 #km
+
+post_distance <- (max(post_density$Distance_vl) - min(post_density$Distance_vl)) * 1.852 #km
+
+#swarms/km
+nrow(island_swarms)/island_distance
+nrow(post_swarms)/post_distance
+
 
 
 
