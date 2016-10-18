@@ -10,6 +10,8 @@ if (Sys.info()[4] == "SCI-6246") {
 }
 
 library(chron)
+library(spatstat)
+library(sp)
 
 island_swarms <- read.csv("AllKrillSwarms.csv", header = T)
 post_swarms   <- read.csv("AllKrillSwarmsPostBalleny.csv", header = T)
@@ -51,22 +53,29 @@ nrow(post_swarms)/post_distance
 
 marked_points <- data.frame("longitude" = island_swarms$Lon_M, "latitude" = island_swarms$Lat_M)
 
+cruise_track <- data.frame(island_density$Longitude, island_density$Latitude)
+cruise_track <- cruise_track[cruise_track[, 1] != 999, ]
+
 #convert to utm so units are in m
 xy = data.frame(marked_points$longitude, marked_points$latitude)
 colnames(coordinates(xy)) <- c("lon", "lat")
 proj4string(xy) <- CRS("+proj=longlat +dat_botum=WGS84")
 marked_points[, 1:2] <- coordinates(spTransform(xy, CRS("+proj=utm +zone=53 ellps=WGS84")))
 
-marked_points$tp <- (marked_points$latitude - min(marked_points$latitude))/(max(marked_points$latitude) - min(marked_points$latitude))
-owin <- owin(xrange = c(min(marked_points$longitude), max(marked_points$longitude)), yrange = c(min(marked_points$latitude), max(marked_points$latitude)))
-transect_bounds <- ppp(x = marked_points$longitude, y = marked_points$latitude, window = owin)
-jointed_vertices <- matrix(FALSE, nrow = nrow(marked_points), ncol = nrow(marked_points))
-pairs <- cbind(seq(1, nrow(marked_points) - 1), seq(2, nrow(marked_points)))
-jointed_vertices[rbind(pairs, cbind(pairs[, 2], pairs[, 1]))] <- TRUE
+colnames(coordinates(cruise_track)) <- c("lon", "lat")
+proj4string(cruise_track) <- CRS("+proj=longlat +dat_botum=WGS84")
+cruise_track <- coordinates(spTransform(cruise_track, CRS("+proj=utm +zone=53 ellps=WGS84")))
 
 
-transect_line <- linnet(vertices = transect_bounds, m = jointed_vertices)
-names(marked_points) <- c("x", "y", "tp")
+vertices <- ppp(x = cruise_track[, 1], y = cruise_track[, 2], window = owin(xrange = range(cruise_track[, 1]), yrange = range(cruise_track[, 2])))
+joined_vertices <- cbind(1:(nrow(cruise_track) - 1), 2:nrow(cruise_track))
+
+m <- matrix(FALSE, nrow = nrow(cruise_track), ncol = nrow(cruise_track))
+m[joined_vertices] <- TRUE
+m[cbind(joined_vertices[, 2], joined_vertices[, 1])] <- TRUE
+
+transect_line <- linnet(vertices = vertices, m = m)
+names(marked_points) <- c("x", "y")
 point_network <- lpp(X = marked_points, L = transect_line)
 
 
