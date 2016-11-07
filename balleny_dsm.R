@@ -202,7 +202,7 @@ under$datetime <- chron(dates. = substr(under$utc, 1, 10), times. = substr(under
 under      <- subset(under, under$datetime >= min(krill$datetime) & under$datetime <= max(krill$datetime))
 under$SB21_SB21sal[under$SB21_SB21sal < 26] <- NA #salinity error values
 under$EK60_EK60dbt_38[under$EK60_EK60dbt_38 == 0] <- NA #depth error values
-
+under$SB21_SB21dens[under$SB21_SB21dens < 26] <- NA #density error values
 
 #average underway data within krill bins
 
@@ -398,7 +398,7 @@ survey.grid.large <- intersect(gBuffer(survey.grid, width = res(grid)[1]), gridp
 island.hole <- gDifference(survey.grid, balleny_poly_utm)
 island.grid <- intersect(island.hole, gridpolygon)
 knot_points <- list(x = coordinates(island.grid)[, 1], y= coordinates(island.grid)[, 2])
-soap.knots  <- make.soapgrid(knot_points, c(10, 10))
+soap.knots  <- make.soapgrid(knot_points, c(11, 11))
 
 #remove boundary points
 ch     <- chull(coordinates(survey.grid.large))
@@ -435,7 +435,7 @@ segdata$idx0_bottom_depth[is.na(segdata$bottom_depth)] <- 2:(sum(segdata$mx0_bot
 segdata$bottom_depth[is.na(segdata$bottom_depth)] <- mean(na.omit(segdata$bottom_depth))
 
 
-whale.dsm <- dsm(Nhat ~ s(x, y, bs="sw", xt=list(bnd=bnd)) + s(krill, k = 5) + s(salinity, k = 5) + s(chl, k = 5) + s(bottom_depth, k = 5, by = ordered(!segdata$mx0_bottom_depth)) +
+whale.dsm <- dsm(Nhat ~ s(x, y, bs="sw", xt=list(bnd=bnd)) + s(krill, k = 5) + chl + s(salinity, k = 8) + chl + s(bottom_depth, k = 5, by = ordered(!segdata$mx0_bottom_depth)) +
                    + s(segdata$idx0_bottom_depth, by = ordered(!segdata$mx0_bottom_depth)), ddf.obj = det_function_size, 
                  segment.data = segdata, observation.data = obsdata, method = "REML", segment.area = segment.area, 
                  knots = soap.knots)
