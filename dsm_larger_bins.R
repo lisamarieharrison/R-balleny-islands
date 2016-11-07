@@ -43,4 +43,13 @@ plot(segdata_new$density, segdata_new$number)
 
 
 
+segdata_new$mx0_bottom_depth <- as.numeric(is.na(segdata_new$bottom_depth))
+segdata_new$idx0_bottom_depth <- 1
+segdata_new$idx0_bottom_depth[is.na(segdata_new$bottom_depth)] <- 2:(sum(segdata_new$mx0_bottom_depth) + 1)
+segdata_new$bottom_depth[is.na(segdata_new$bottom_depth)] <- mean(na.omit(segdata_new$bottom_depth))
 
+
+seg_points <- SpatialPoints(segdata_new[, c("x", "y")], proj4string = CRS(proj4string(balleny_poly_utm)))
+
+
+segdata_new <- segdata_new[-which(!is.na(over(seg_points, balleny_poly_utm))), ]
