@@ -60,7 +60,9 @@ function_list <- c("gcdHF.R",
                    "envToGrid.R",
                    "grid_plot_obj.R",
                    "check_cols.R",
-                   "reticleDistances.R"
+                   "reticleDistances.R",
+                   "grid_plot_obj_NA.R",
+                   "multiplot.R"
 )
 
 for (f in function_list) {
@@ -481,7 +483,6 @@ dsm.cor(whale.dsm, max.lag = 10, Segment.Label="Sample.Label")
 #data frame of prediction locations
 preddata <- data.frame(cbind(coordinates(survey.grid), grid_cell_area, krill_mean, res(grid)[1], cloud_mean, SST_mean, salinity_mean, depth_mean, chl_mean, 0, 1))
 colnames(preddata) <- c("x", "y", "area", "krill", "Effort", "cloud", "SST", "salinity", "bottom_depth", "chl", "mx0_bottom_depth", "idx0_bottom_depth")
-preddata <- na.omit(preddata)
 
 #calculate predicted values
 
@@ -506,16 +507,39 @@ if (all.vars(model.obj$formula)[1] == "D") {
 }
 ddf.cv <- summary(model.obj$ddf)$average.p.se/summary(model.obj$ddf)$average.p
 
-p <- ggplot() + grid_plot_obj(fill = whale_pred, name = "est", sp = survey.grid) +
-  geom_polygon(data=balleny_ggplot, aes(x=long, y=lat, group=id), color="black", fill = "grey")
-p
+p1 <- ggplot() + grid_plot_obj_NA(fill = whale_pred, name = "Estimate", sp = survey.grid) +
+  geom_polygon(data=balleny_ggplot, aes(x=long, y=lat, group=id), color="black", fill = "grey") +
+  theme_bw() +
+  theme(text =  element_text(size = 25)) +
+  scale_x_continuous(expand = c(0,0)) +
+  scale_y_continuous(expand = c(0,0)) +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank(),
+        panel.background = element_blank()) +
+  geom_vline(xintercept = 350000) + 
+  geom_hline(yintercept = 2490000) +
+  xlab("Easting") +
+  ylab("Northing") +
+  annotate("text", x = 495000, y = 2655000, label = "(a)", size = 10)
 
-p <- ggplot() + grid_plot_obj(fill = cv + ddf.cv, name = "CV", sp = survey.grid) +
+p2 <- ggplot() + grid_plot_obj_NA(fill = cv + ddf.cv, name = "CV", sp = survey.grid) +
   geom_polygon(data=balleny_ggplot, aes(x=long, y=lat, group=id), color="black", fill = "grey") + 
-  geom_point(aes(x = Longitude, y = Latitude), data = data.frame(coordinates(true_lat_long_utm))) 
-p
+  theme_bw() +
+  theme(text =  element_text(size = 25)) +
+  scale_x_continuous(expand = c(0,0)) +
+  scale_y_continuous(expand = c(0,0)) +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank(),
+        panel.background = element_blank()) +
+  geom_vline(xintercept = 350000) + 
+  geom_hline(yintercept = 2490000) +
+  xlab("Easting") +
+  ylab("") +
+  annotate("text", x = 495000, y = 2655000, label = "(b)", size = 10)
 
-
+multiplot(p1, p2, cols = 2)
 
 #------------------------------- SEA ICE DATA AAD --------------------------------#
 
@@ -612,6 +636,33 @@ plot(whale.dsm, select = 4, xlab = "Bottom depth (m)", ylab = "s(bottom_depth,2.
 legend(1000, 6, "(c)", bty = "n", cex = 1.5)
 
 
-plot(seq(0, 5, by = 0.1), as.numeric(whale.dsm$coefficients[2])*seq(0, 5, by = 0.1), type = "l", ylim = c(-4, 4), bty = "l", xlab = "Chlorophyll-a", ylab = "Whale count")
+
+# ------------------- BATHYMETRY PLOT ------------------------- #
+
+dsn <- "~/Lisa/phd/Balleny Islands/bathymetry/ibcso_bed_contour_500m.shp"
+ogrInfo(dsn)
+
+shape <- readShapeSpatial("~/Lisa/phd/Balleny Islands/bathymetry/ibcso_bed_contour_500m")
+
+proj4string(shape) <- CRS("+proj=stere +lat_0=-90 +lon_0=0 +lat_ts=-65 +ellps=WGS84 +datum=WGS84 +units=m")
+
+shape_utm <- spTransform(shape, CRS(proj4string(balleny_poly)))
+
+shape_crop <- as(extent(balleny_poly), "SpatialPolygons")
+proj4string(shape_crop) <- CRS(proj4string(balleny_poly))
+
+track_line_lat <- spTransform(track_line, CRS(proj4string(balleny_poly)))
+
+## Clip the map
+out <- gIntersection(shape_utm, shape_crop, byid=TRUE)
+
+## Plot the output
+plot(out[-c(30, 32, 34, 35, 40, 43, 47:50)])
+
+
+plot(balleny_poly, add = T, col = "grey")
+
+points(gps_lat_long, col = "red", pch= 19)
+
 
 
