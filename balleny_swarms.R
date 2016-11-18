@@ -79,6 +79,14 @@ names(marked_points) <- c("x", "y")
 point_network <- lpp(X = marked_points, L = transect_line)
 
 
+# whale sightings after islands
 
+sighting <- read.csv("Sighting.csv", header = T)
+sighting <- subset(sighting, Species == 07 & Platform == "MI")
+sighting$datetime <- chron(dates. = as.character(sighting$Date), times. = as.character(sighting$Time), format = c(dates = "d/m/y", times = "h:m:s"))
+
+post_sighting <- sighting[sighting$datetime > min(post_swarms$datetime) & sighting$datetime < max(post_swarms$datetime), ]
+
+range(post_swarms$datetime)
 
 
