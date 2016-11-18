@@ -126,6 +126,20 @@ for (i in 1:length(krill$datetime)) {
   
 }
 
+# --------------------------------- SURVEY TRACKLINE ------------------------------------ #
+
+gps_lat_long <- SpatialPoints(na.omit(gps[, c("Longitude", "Latitude")]), proj4string = CRS("+proj=longlat +datum=WGS84"))
+gps_lat_long_utm <- spTransform(gps_lat_long, CRS("+proj=utm +zone=58 +south +ellps=WGS84"))
+
+
+plot(balleny_poly, col = "grey", xlim = c(162, 165.5), ylim = c(-67.7, -66), xlab = "Longitude", ylab = "Latitude")
+points(gps_lat_long, pch = 19)
+
+axis(1, seq(162, 165.5, length.out = 5), round(seq(162, 165.5, length.out = 5), 2))
+
+axis(2, seq(-67.7, -66, length.out = 5), round(seq(-67.7, -66, length.out = 5), 2))
+
+
 #------------------------------------ TRUE SIGHTING LOCATION ---------------------------------------#
 
 #find true lat and long of sighting using reticle
@@ -435,11 +449,23 @@ segdata$idx0_bottom_depth[is.na(segdata$bottom_depth)] <- 2:(sum(segdata$mx0_bot
 segdata$bottom_depth[is.na(segdata$bottom_depth)] <- mean(na.omit(segdata$bottom_depth))
 
 
-whale.dsm <- dsm(Nhat ~ s(x, y, bs="sw", xt=list(bnd=bnd)) + s(krill, k = 5) + chl + s(salinity, k = 8) + chl + s(bottom_depth, k = 5, by = ordered(!segdata$mx0_bottom_depth)) +
-                   + s(segdata$idx0_bottom_depth, by = ordered(!segdata$mx0_bottom_depth)), ddf.obj = det_function_size, 
+whale.dsm <- dsm(Nhat ~ s(x, y, bs="sw", xt=list(bnd=bnd)) + s(krill, k = 5) + chl + s(salinity, k = 8) + s(bottom_depth, k = 5, by = ordered(!mx0_bottom_depth)) +
+                   + s(idx0_bottom_depth, by = ordered(!mx0_bottom_depth)), ddf.obj = det_function_size, 
                  segment.data = segdata, observation.data = obsdata, method = "REML", segment.area = segment.area, 
                  knots = soap.knots)
 summary(whale.dsm)
+
+
+segdata$count <- 0
+
+for (i in 1:nrow(obsdata)) {
+  
+  seg <- (segdata$Transect.Label == obsdata$Transect.Label[i] & segdata$Sample.Label == obsdata$Sample.Label[i])
+  
+  segdata$count[seg] <- segdata$count[seg] + 1
+  
+}
+
 
 #plot relative counts over the smooth space
 vis.gam(whale.dsm, plot.type="contour", view = c("x","y"), too.far = 0.1, asp = 1, type = "response", contour.col = "black", n.grid = 100)
@@ -455,6 +481,7 @@ dsm.cor(whale.dsm, max.lag = 10, Segment.Label="Sample.Label")
 #data frame of prediction locations
 preddata <- data.frame(cbind(coordinates(survey.grid), grid_cell_area, krill_mean, res(grid)[1], cloud_mean, SST_mean, salinity_mean, depth_mean, chl_mean, 0, 1))
 colnames(preddata) <- c("x", "y", "area", "krill", "Effort", "cloud", "SST", "salinity", "bottom_depth", "chl", "mx0_bottom_depth", "idx0_bottom_depth")
+preddata <- na.omit(preddata)
 
 #calculate predicted values
 
@@ -569,16 +596,22 @@ for (i in 3:6) {
 
 
 
+# ------------------------ PLOTS FOR PAPER ------------------------ #
+
+plot(whale.dsm, select = 1, main = "", xlab = "Easting", ylab = "Northing", bty = "l")
+plot(balleny_poly_utm, add = T, col = "grey", bty = "l")
+axis(1)
+axis(2)
+
+par(mfrow = c(2, 2), oma = c(1,1,0,0), mar = c(4,4,1,1))
+plot(whale.dsm, select = 2, xlab = expression(Krill~density~(gm^-2)), bty = "l")
+legend(1500, 39, "(a)", bty = "n", cex = 1.5)
+plot(whale.dsm, select = 3, xlab = "Salinity (ppm)", ylim = c(-10, 10), bty = "l")
+legend(33.85, 13, "(b)", bty = "n", cex = 1.5)
+plot(whale.dsm, select = 4, xlab = "Bottom depth (m)", ylab = "s(bottom_depth,2.23)", ylim = c(-5, 5), bty = "l")
+legend(1000, 6, "(c)", bty = "n", cex = 1.5)
 
 
-
-
-
-
-
-
-
-
-
+plot(seq(0, 5, by = 0.1), as.numeric(whale.dsm$coefficients[2])*seq(0, 5, by = 0.1), type = "l", ylim = c(-4, 4), bty = "l", xlab = "Chlorophyll-a", ylab = "Whale count")
 
 
