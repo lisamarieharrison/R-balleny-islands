@@ -4,11 +4,11 @@ for (i in seq(1, nrow(segdata) - 1, by = 3)) {
   
   if (segdata$Transect.Label[i] == segdata$Transect.Label[i + 1] & segdata$Transect.Label[i] == segdata$Transect.Label[i + 2]) {
     
-    temp <- colMeans(segdata[c(i:(i + 2)), ])
-    temp[5] <- sum(segdata[c(i:(i + 2)), 5])
-    temp[9] <- sum(segdata[c(i:(i + 2)), 9])
-    temp[14] <- mean(segdata[c(i:(i + 2)), 14])
-    temp[7] <- mean(segdata[c(i:(i + 2)), 7])
+    temp <- colMeans(segdata[c(i:(i + 2)), ], na.rm = T)
+    temp[5] <- sum(segdata[c(i:(i + 2)), 5], na.rm = T)
+    temp[9] <- sum(segdata[c(i:(i + 2)), 9], na.rm = T)
+    temp[14] <- mean(segdata[c(i:(i + 2)), 14], na.rm = T)
+    temp[7] <- mean(segdata[c(i:(i + 2)), 7], na.rm = T)
     
     segdata_new <- rbind(segdata_new, temp)
     
