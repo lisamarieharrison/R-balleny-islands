@@ -62,7 +62,8 @@ function_list <- c("gcdHF.R",
                    "check_cols.R",
                    "reticleDistances.R",
                    "grid_plot_obj_NA.R",
-                   "multiplot.R"
+                   "multiplot.R",
+                   "draw_map_scale"
 )
 
 for (f in function_list) {
@@ -660,18 +661,25 @@ out <- gIntersection(shape_utm, shape_crop, byid=TRUE)
 
 #plot cruise track over map
 
-par(mar = c(4, 5, 1, 1))
+lines_ggplot <- fortify(SpatialLinesDataFrame(out[-c(31, 33, 35, 36, 41, 45, 50:55), ], data = as.data.frame(matrix(NA, nrow = 43)), match.ID = F))
 
-plot(out[-c(31, 33, 35, 36, 41, 45, 50:55)], xlab = "Latitude", ylab = "Longitude", xlim = extent(shape_crop)[1:2]) # plot bathymetry
+ggplot(lines_ggplot, aes(x=long, y=lat, group = group)) +
+  labs(x = "Longitude", y = "Latitude") +
+  geom_path(col = "grey") + 
+  geom_polygon(data=fortify(balleny_poly, region="id"), aes(x=long, y=lat, group=id), color="black", fill = "grey") +
+  geom_point(data = as.data.frame(coordinates(gps_lat_long)), aes(x=Longitude, y=Latitude, group = 1), col = "red") +
+  theme_bw() +
+  theme(panel.grid.major.x = element_blank(), panel.grid.major.y = element_blank()) +
+  annotate("text", x = 162.4, y = -66.45, label = 'atop(bold("Young"))', parse = TRUE, size = 5) +
+  annotate("text", x = 163.1, y = -66.85, label = 'atop(bold("Buckle"))', parse = TRUE, size = 5) +
+  annotate("text", x = 164.8, y = -67.5, label = 'atop(bold("Sturge"))', parse = TRUE, size = 5) +
+  scaleBar(lon = 162, lat = -67.6, 
+           distanceLon = 10, distanceLat = 5, distanceLegend = 10, 
+           dist.unit = "km", orientation = FALSE)
 
-plot(balleny_poly, add = T, col = "grey") #add islands
 
-points(gps_lat_long, pch= 19) # add cruise track
 
-axis(1, seq(extent(shape_crop)[1], extent(shape_crop)[2], length.out = 10), round(seq(extent(shape_crop)[1], extent(shape_crop)[2], length.out = 10), 2))
-axis(2, seq(extent(shape_crop)[3], extent(shape_crop)[4], length.out = 10), round(seq(extent(shape_crop)[3], extent(shape_crop)[4], length.out = 10), 2))
 
-text(161.9, -66.4, "Young\n Island")
 
-text(162.5, -66.9, "Buckle\n Island")
+
 
