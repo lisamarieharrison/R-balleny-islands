@@ -636,6 +636,8 @@ plot(whale.dsm, select = 4, xlab = "Bottom depth (m)", ylab = "s(bottom_depth,2.
 legend(1000, 6, "(c)", bty = "n", cex = 1.5)
 
 
+plot(det_function_size)
+
 
 # ------------------- BATHYMETRY PLOT ------------------------- #
 
@@ -648,7 +650,7 @@ proj4string(shape) <- CRS("+proj=stere +lat_0=-90 +lon_0=0 +lat_ts=-65 +ellps=WG
 
 shape_utm <- spTransform(shape, CRS(proj4string(balleny_poly)))
 
-shape_crop <- as(extent(balleny_poly), "SpatialPolygons")
+shape_crop <- as(extent(balleny_poly) + c(-0.2, 0.1, -0.1, 0.2), "SpatialPolygons")
 proj4string(shape_crop) <- CRS(proj4string(balleny_poly))
 
 track_line_lat <- spTransform(track_line, CRS(proj4string(balleny_poly)))
@@ -656,13 +658,20 @@ track_line_lat <- spTransform(track_line, CRS(proj4string(balleny_poly)))
 ## Clip the map
 out <- gIntersection(shape_utm, shape_crop, byid=TRUE)
 
-## Plot the output
-plot(out[-c(30, 32, 34, 35, 40, 43, 47:50)])
+#plot cruise track over map
 
+par(mar = c(4, 5, 1, 1))
 
-plot(balleny_poly, add = T, col = "grey")
+plot(out[-c(31, 33, 35, 36, 41, 45, 50:55)], xlab = "Latitude", ylab = "Longitude", xlim = extent(shape_crop)[1:2]) # plot bathymetry
 
-points(gps_lat_long, col = "red", pch= 19)
+plot(balleny_poly, add = T, col = "grey") #add islands
 
+points(gps_lat_long, pch= 19) # add cruise track
 
+axis(1, seq(extent(shape_crop)[1], extent(shape_crop)[2], length.out = 10), round(seq(extent(shape_crop)[1], extent(shape_crop)[2], length.out = 10), 2))
+axis(2, seq(extent(shape_crop)[3], extent(shape_crop)[4], length.out = 10), round(seq(extent(shape_crop)[3], extent(shape_crop)[4], length.out = 10), 2))
+
+text(161.9, -66.4, "Young\n Island")
+
+text(162.5, -66.9, "Buckle\n Island")
 
