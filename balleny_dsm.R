@@ -129,6 +129,13 @@ for (i in 1:length(krill$datetime)) {
   
 }
 
+
+# ------------------------------ TOTAL ON EFFORT TIME ----------------------------------- #
+
+#on-effort time (hr)
+sum(diff(effort$datetime)[seq(1, nrow(effort), by = 2)])*24
+
+
 # --------------------------------- SURVEY TRACKLINE ------------------------------------ #
 
 gps_lat_long <- SpatialPoints(na.omit(gps[, c("Longitude", "Latitude")]), proj4string = CRS("+proj=longlat +datum=WGS84"))
@@ -328,7 +335,7 @@ segdata <- data.frame("longitude" = krill$Longitude, "latitude" = krill$Latitude
                       "Effort" = krill$integrationInterval.m, "Transect.Label" = krill$transect, "Sample.Label" = c(1:nrow(krill)), 
                       "krill" = krill$krillArealDen.gm2, "number" = obs_count, "cloud" = krill_env$CloudCover, "sea_state" = krill_env$SeaState, 
                       "sightability" = krill_env$Sightability, "SST" = as.numeric(as.character(krill_env$SST)), "datetime" = krill$datetime,
-                      "salinity" = krill_underway$SB21_SB21sal, "bottom_depth" = krill_underway$EK60_EK60dbt_38, "density" = krill_underway$SB21_SB21dens,
+                      "salinity" = krill_underway$SB21_SB21sal, "bottom_depth" = krill_underway$ES60_ES60dbt, "density" = krill_underway$SB21_SB21dens,
                       "chl" = krill_underway$TRIPLET_TripletChl, "overlap" = percent)
 
 obsdata <- data.frame(cbind(c(1:nrow(sighting)), closest_bin, segdata$Transect.Label[closest_bin], sighting$BestNumber, sighting$distance*1000))
@@ -445,17 +452,8 @@ soap.knots <- soap.knots[inSide(bnd, x, y), ]
 check.cols(ddf.obj = det_function, segment.data = segdata, observation.data = obsdata, segment.area = segment.area)
 
 
-#random effects to stop gam throwing out missing data
-segdata$mx0_bottom_depth <- as.numeric(is.na(segdata$bottom_depth))
-segdata$idx0_bottom_depth <- 1
-segdata$idx0_bottom_depth[is.na(segdata$bottom_depth)] <- 2:(sum(segdata$mx0_bottom_depth) + 1)
-segdata$bottom_depth[is.na(segdata$bottom_depth)] <- mean(na.omit(segdata$bottom_depth))
-
-
-whale.dsm <- dsm(Nhat ~ s(x, y, bs="sw", xt=list(bnd=bnd)) + s(krill, k = 5) + chl + s(salinity, k = 8) + s(bottom_depth, k = 5, by = ordered(!mx0_bottom_depth)) +
-                   + s(idx0_bottom_depth, by = ordered(!mx0_bottom_depth)), ddf.obj = det_function_size, 
-                 segment.data = segdata, observation.data = obsdata, method = "REML", segment.area = segment.area, 
-                 knots = soap.knots)
+whale.dsm <- dsm(Nhat ~ s(x, y, bs="sw", xt=list(bnd=bnd)) + s(krill) + chl + s(salinity) + s(bottom_depth), ddf.obj = det_function_size, 
+                 segment.data = segdata, observation.data = obsdata, method = "REML", segment.area = segment.area, knots = soap.knots)
 summary(whale.dsm)
 
 
@@ -541,6 +539,9 @@ p2 <- ggplot() + grid_plot_obj_NA(fill = cv + ddf.cv, name = "CV", sp = survey.g
   annotate("text", x = 495000, y = 2655000, label = "(b)", size = 10)
 
 multiplot(p1, p2, cols = 2)
+
+#SE of prediction
+sqrt(sum(na.omit(cv*whale_pred)^2))
 
 #------------------------------- SEA ICE DATA AAD --------------------------------#
 
@@ -676,9 +677,6 @@ ggplot(lines_ggplot, aes(x=long, y=lat, group = group)) +
   scaleBar(lon = 162, lat = -67.6, 
            distanceLon = 10, distanceLat = 5, distanceLegend = 10, 
            dist.unit = "km", orientation = FALSE)
-
-
-
 
 
 
