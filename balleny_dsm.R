@@ -451,6 +451,7 @@ soap.knots <- soap.knots[inSide(bnd, x, y), ]
 #check data format is correct
 check.cols(ddf.obj = det_function, segment.data = segdata, observation.data = obsdata, segment.area = segment.area)
 
+segdata$bottom_depth[segdata$bottom_depth == 0] <- NA
 
 whale.dsm <- dsm(Nhat ~ s(x, y, bs="sw", xt=list(bnd=bnd)) + s(krill) + chl + s(salinity) + s(bottom_depth), ddf.obj = det_function_size, 
                  segment.data = segdata, observation.data = obsdata, method = "REML", segment.area = segment.area, knots = soap.knots)
@@ -631,7 +632,7 @@ axis(2)
 
 par(mfrow = c(2, 2), oma = c(1,1,0,0), mar = c(4,4,1,1))
 plot(whale.dsm, select = 2, xlab = expression(Krill~density~(gm^-2)), bty = "l")
-legend(1500, 39, "(a)", bty = "n", cex = 1.5)
+legend(1500, 20, "(a)", bty = "n", cex = 1.5)
 plot(whale.dsm, select = 3, xlab = "Salinity (ppm)", ylim = c(-10, 10), bty = "l")
 legend(33.85, 13, "(b)", bty = "n", cex = 1.5)
 plot(whale.dsm, select = 4, xlab = "Bottom depth (m)", ylab = "s(bottom_depth,2.23)", ylim = c(-5, 5), bty = "l")
