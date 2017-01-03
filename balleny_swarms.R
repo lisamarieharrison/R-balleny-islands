@@ -24,7 +24,7 @@ hist(post_swarms$Corrected_length)
 
 #K-S test for swarm density
 #probably from the same distribution ( = 0.1027)
-ks.test(island_swarms$volDengPerm3, post_swarms$volDengPerm3)
+ks.test(island_swarms$volDengPerm3, post_swarms$volDengPerm3, alternative = "greater")
 ks.test(island_swarms$Corrected_length, post_swarms$Corrected_length, alternative = "greater")
 
 #create datetime
@@ -88,5 +88,3 @@ sighting$datetime <- chron(dates. = as.character(sighting$Date), times. = as.cha
 post_sighting <- sighting[sighting$datetime > min(post_swarms$datetime) & sighting$datetime < max(post_swarms$datetime), ]
 
 range(post_swarms$datetime)
-
-
