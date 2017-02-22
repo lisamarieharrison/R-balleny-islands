@@ -468,6 +468,8 @@ for (i in 1:nrow(obsdata)) {
   
 }
 
+#calculate disperion parameter manually
+with(whale.dsm, sum((weights * residuals^2)[weights > 0])/df.residual)
 
 #plot relative counts over the smooth space
 vis.gam(whale.dsm, plot.type="contour", view = c("x","y"), too.far = 0.1, asp = 1, type = "response", contour.col = "black", n.grid = 100)
