@@ -648,8 +648,13 @@ legend(33.85, 13, "(b)", bty = "n", cex = 1.5)
 plot(whale.dsm, select = 4, xlab = "Bottom depth (m)", ylab = "s(bottom_depth,2.23)", ylim = c(-5, 5), bty = "l")
 legend(1000, 6, "(c)", bty = "n", cex = 1.5)
 
+#plot detection function
+source("~/Lisa/phd/Balleny Islands/R-balleny-islands/plot_ds_custom_function.R")
+hist_obj <- plot.ds.custom(x=det_function_size$ddf, showpoints = FALSE, pl.den = c(0, 0), ylim = c(0, 1.8), xlab = "Distance (m)", xlim = c(0, 14500))
 
-plot(det_function_size)
+#add number of observations in each bin above the histogram bars
+text(hist_obj$mids, hist_obj$density + 0.1, hist_obj$counts)
+
 
 
 # ------------------- BATHYMETRY PLOT ------------------------- #
