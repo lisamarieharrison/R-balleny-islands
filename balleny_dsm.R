@@ -668,7 +668,9 @@ hist_obj <- plot.ds.custom(x=det_function_size$ddf, showpoints = FALSE, pl.den =
 #add number of observations in each bin above the histogram bars
 text(hist_obj$mids, hist_obj$density + 0.1, hist_obj$counts)
 
-
+# krill frequency histogram
+hist(segdata$krill[segdata$krill < 500], xlab = expression(Krill~density~(gm^-2)), main = "",
+     cex.axis = 1.5, cex.lab = 1.5)
 
 # ------------------- BATHYMETRY PLOT ------------------------- #
 
