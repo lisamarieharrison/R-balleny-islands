@@ -174,7 +174,7 @@ true_lat_long_utm <- spTransform(true_lat_long, CRS("+proj=utm +zone=58 +south +
 
 reticle_dists <- rev(unlist(apply(reticle, 1, reticleDistances)))
 
-left_bin <- 0 #left truncation distance
+left_bin <- 200 #left truncation distance
 for (i in 2:length(reticle_dists)) {
   
   left_bin[i] <- (reticle_dists[i] + (reticle_dists[i - 1] - reticle_dists[i])/2)*1000
@@ -248,7 +248,7 @@ colnames(krill_underway) <- colnames(under[, 5:60])
 #read csv file of coordinates for each island
 for (i in 1:3) {
   
-  b <- read.csv(paste("~/phd/southern ocean/Balleny Islands/polygons/Balleny_", i, ".csv", sep = ""), header = F)
+  b <- read.csv(paste("~/Lisa/phd/Balleny Islands/polygons/Balleny_", i, ".csv", sep = ""), header = F)
   x <- unlist(b[seq(1, length(b), by = 3)])
   y <- unlist(b[seq(2, length(b), by = 3)])
   assign(paste("b", i, "_poly", sep = ""), Polygon(cbind(x, y), hole = FALSE))
@@ -351,9 +351,8 @@ obsdata  <- na.omit(obsdata)
 distdata <- na.omit(distdata)
 
 #for ds function
-left_truncation <- 0
 region.table <- segdata[6]
-region.table$Area <- segdata$Effort*(13800 - left_truncation)*2
+region.table$Area <- segdata$Effort*(13800 - 200)*2
 region.table <- aggregate(region.table$Area, by = list(region.table$Transect.Label), FUN = "sum")
 names(region.table) <- c("Region.Label", "Area")
 
@@ -364,8 +363,8 @@ obs.table <- obsdata[1:3]
 names(obs.table) <- c("object", "Sample.Label", "Region.Label")
 
 #using ds
-det_function <- ds(data = distdata, cutpoints = left_bin, key="hn", adjustment=NULL)
-det_function_size <- ds(distdata, cutpoints = left_bin, formula=~size, key="hn", adjustment=NULL, sample.table = sample.table, region.table = region.table, obs.table = obs.table)
+det_function <- ds(data = distdata, truncation = list(left = 200, right = 13800), cutpoints = left_bin, key="hn", adjustment=NULL)
+det_function_size <- ds(distdata, truncation = list(left = 200, right = 13800), cutpoints = left_bin, formula=~size, key="hn", adjustment=NULL, sample.table = sample.table, region.table = region.table, obs.table = obs.table)
 
 # ------------------------------ SURVEY AREA POLYGON -------------------------------- #
 
@@ -469,15 +468,25 @@ for (i in 1:nrow(obsdata)) {
   
 }
 
+#calculate disperion parameter manually
+with(whale.dsm, sum((weights * residuals^2)[weights > 0])/df.residual)
 
 #plot relative counts over the smooth space
-vis.gam(whale.dsm, plot.type="contour", view = c("x","y"), too.far = 0.1, asp = 1, type = "response", contour.col = "black", n.grid = 100,
-        xlab = "Easting", ylab = "Northing")
+vis.gam(whale.dsm, plot.type="contour", view = c("x","y"), too.far = 0.1, asp = 1, type = "response", contour.col = "black", n.grid = 100)
 plot(balleny_poly_utm, add = TRUE, col = "grey")
+points(true_lat_long_utm, pch = 19)
 
 #check spatial autocorrelation
 dsm.cor(whale.dsm, max.lag = 10, Segment.Label="Sample.Label")
 
+#contour plot of x, y with colour scale bar
+plot_dat <- plot.gam(whale.dsm, select = 1)
+fill_col <- plot_dat[[1]]$fit
+x <- plot_dat[[1]]$xscale
+y <- plot_dat[[1]]$yscale
+
+image.plot(x, y, fill_col, col = heat.colors(100), xlab = "Easting", ylab = "Northing")
+contour(x, y, fill_col, add = TRUE)
 
 # ---------------------------- ABUNDANCE ESTIMATION ---------------------------#
 
@@ -634,7 +643,7 @@ axis(2)
 par(mfrow = c(2, 2), oma = c(1,1,0,0), mar = c(4,4,1,1))
 plot(whale.dsm, select = 2, xlab = expression(Krill~density~(gm^-2)), bty = "l")
 legend(1500, 20, "(a)", bty = "n", cex = 1.5)
-plot(whale.dsm, select = 3, xlab = "Salinity (psu)", ylim = c(-10, 10), bty = "l")
+plot(whale.dsm, select = 3, xlab = "Salinity (ppm)", ylim = c(-10, 10), bty = "l")
 legend(33.85, 13, "(b)", bty = "n", cex = 1.5)
 plot(whale.dsm, select = 4, xlab = "Bottom depth (m)", ylab = "s(bottom_depth,2.23)", ylim = c(-5, 5), bty = "l")
 legend(1000, 6, "(c)", bty = "n", cex = 1.5)
@@ -649,7 +658,12 @@ points(chl_x, chl_y+2*chl_se, type = "l", lty = 2)
 legend(2.5, 1, "(d)", bty = "n", cex = 1.5)
 rug(unique(whale.dsm$data$chl))
 
-plot(det_function_size)
+#plot detection function
+source("~/Lisa/phd/Balleny Islands/R-balleny-islands/plot_ds_custom_function.R")
+hist_obj <- plot.ds.custom(x=det_function_size$ddf, showpoints = FALSE, pl.den = c(0, 0), ylim = c(0, 1.8), xlab = "Distance (m)", xlim = c(0, 14500))
+#add number of observations in each bin above the histogram bars
+text(hist_obj$mids, hist_obj$density + 0.1, hist_obj$counts)
+
 
 
 # ------------------- BATHYMETRY PLOT ------------------------- #
