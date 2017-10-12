@@ -640,15 +640,17 @@ plot(balleny_poly_utm, add = T, col = "grey", bty = "l")
 axis(1)
 axis(2)
 
-par(mfrow = c(3, 2), oma = c(1,1,0,0), mar = c(4,4,1,1))
+dev.new(9, 9)
+
+par(mfrow = c(3, 2), oma = c(1,1,0,0), mar = c(4,4,1,1), cex.axis=1.5, cex.lab=1.5)
 plot(whale.dsm, select = 2, xlab = expression(Krill~density~(gm^-2)), bty = "l")
-legend(1500, 30, "(a)", bty = "n", cex = 1.5)
+legend(1700, 15, "(a)", bty = "n", cex = 1.5)
 plot(whale.dsm, select = 2, xlab = expression(Zoomed~Krill~density~(gm^-2)), bty = "l", xlim = c(0, 500), ylim = c(-5, 5), ylab = "s(krill,4.13)")
-legend(300, 9, "(b)", bty = "n", cex = 1.5)
+legend(300, 5, "(b)", bty = "n", cex = 1.5)
 plot(whale.dsm, select = 3, xlab = "Salinity (ppm)", ylim = c(-10, 10), bty = "l")
-legend(33.9, 17, "(c)", bty = "n", cex = 1.5)
+legend(33.9, 10, "(c)", bty = "n", cex = 1.5)
 plot(whale.dsm, select = 4, xlab = "Bottom depth (m)", ylab = "s(bottom_depth,2.23)", ylim = c(-5, 5), bty = "l")
-legend(1500, 8, "(d)", bty = "n", cex = 1.5)
+legend(1500, 6, "(d)", bty = "n", cex = 1.5)
 
 # linear chl a plot
 chl_x <- seq(min(whale.dsm$data$chl), max(whale.dsm$data$chl), by = 0.1)
@@ -657,7 +659,7 @@ chl_se <- summary(whale.dsm)$se["chl"]
 plot(chl_x, chl_y, type = "l", xlab = expression(Chl-a~(mu ~gL^-1)), ylab = "whale count", bty = "l")
 points(chl_x, chl_y-2*chl_se, type = "l", lty = 2)
 points(chl_x, chl_y+2*chl_se, type = "l", lty = 2)
-legend(2.8, 1.5, "(e)", bty = "n", cex = 1.5)
+legend(2.8, 1, "(e)", bty = "n", cex = 1.5)
 rug(unique(whale.dsm$data$chl))
 
 #plot detection function
