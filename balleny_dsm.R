@@ -639,6 +639,15 @@ legend(33.85, 13, "(b)", bty = "n", cex = 1.5)
 plot(whale.dsm, select = 4, xlab = "Bottom depth (m)", ylab = "s(bottom_depth,2.23)", ylim = c(-5, 5), bty = "l")
 legend(1000, 6, "(c)", bty = "n", cex = 1.5)
 
+# linear chl a plot
+chl_x <- seq(min(whale.dsm$data$chl), max(whale.dsm$data$chl), by = 0.1)
+chl_y <- scale(whale.dsm$coefficients["chl"]*chl_x, scale=FALSE)
+chl_se <- summary(whale.dsm)$se["chl"]
+plot(chl_x, chl_y, type = "l", xlab = expression(Chl-a~(mu ~gL^-1)), ylab = "whale count", bty = "l")
+points(chl_x, chl_y-2*chl_se, type = "l", lty = 2)
+points(chl_x, chl_y+2*chl_se, type = "l", lty = 2)
+legend(2.5, 1, "(d)", bty = "n", cex = 1.5)
+rug(unique(whale.dsm$data$chl))
 
 plot(det_function_size)
 
